@@ -73,15 +73,18 @@ jobs:
             $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
             $bmp.Save("$PWD\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
           }
-          $p = Start-Process .\Starfield.scr -ArgumentList "/s" -PassThru
+          # Windows opens any .scr with /S and drops other arguments, so run a copy named .exe.
+          Copy-Item .\Starfield.scr .\Starfield.exe
+          $p = Start-Process .\Starfield.exe -ArgumentList "/s" -PassThru
           Start-Sleep -Seconds 5
           Shot "windows-fullscreen"
-          if ($p.HasExited) { throw "Starfield.scr /s exited early with $($p.ExitCode)" }
+          if ($p.HasExited) { throw "Starfield /s exited early with $($p.ExitCode)" }
           Stop-Process -Id $p.Id
-          $c = Start-Process .\Starfield.scr -ArgumentList "/c" -PassThru
+          Start-Sleep -Seconds 1
+          $c = Start-Process .\Starfield.exe -ArgumentList "/c" -PassThru
           Start-Sleep -Seconds 3
           Shot "windows-options"
-          if ($c.HasExited) { throw "Starfield.scr /c exited early with $($c.ExitCode)" }
+          if ($c.HasExited) { throw "Starfield /c exited early with $($c.ExitCode)" }
           Stop-Process -Id $c.Id
       - uses: actions/upload-artifact@v4
         with:
