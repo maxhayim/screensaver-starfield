@@ -1,0 +1,156 @@
+# Builds every platform, runs the tests, and runs the Windows and Linux
+# savers for a few seconds to take screenshots (see the run's artifacts).
+# On a version tag (v1.2.3) it also publishes the GitHub release.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the core
+        run: |
+          mkdir -p build
+          cc -std=c99 -Wall -Wextra -Werror -Icore core/starfield.c core/canvas.c tests/test_starfield.c -lm -o build/test_starfield
+          build/test_starfield
+      - name: Build Starfield.saver
+        run: macos/build.sh
+      - name: Render a frame
+        run: |
+          swiftc tools/preview.swift -o build/preview -framework ScreenSaver
+          build/preview build/Starfield.saver build/macos.png 4
+      - name: Package
+        run: ditto -c -k --keepParent build/Starfield.saver build/Starfield.saver.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            build/Starfield.saver.zip
+            build/macos.png
+
+  windows-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - name: Build Starfield.scr
+        run: |
+          CC=x86_64-w64-mingw32-gcc WINDRES=x86_64-w64-mingw32-windres windows/build.sh
+          cd build && zip -9 Starfield-windows.zip Starfield.scr
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            build/Starfield.scr
+            build/Starfield-windows.zip
+
+  windows-smoke:
+    needs: windows-build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+      - name: Run it and take screenshots
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("$PWD\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          }
+          $p = Start-Process .\Starfield.scr -ArgumentList "/s" -PassThru
+          Start-Sleep -Seconds 5
+          Shot "windows-fullscreen"
+          if ($p.HasExited) { throw "Starfield.scr /s exited early with $($p.ExitCode)" }
+          Stop-Process -Id $p.Id
+          $c = Start-Process .\Starfield.scr -ArgumentList "/c" -PassThru
+          Start-Sleep -Seconds 3
+          Shot "windows-options"
+          if ($c.HasExited) { throw "Starfield.scr /c exited early with $($c.ExitCode)" }
+          Stop-Process -Id $c.Id
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-screenshots
+          path: "*.png"
+
+  linux:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install X11 headers and a virtual display
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev xvfb x11-apps imagemagick
+      - name: Test the core
+        run: |
+          mkdir -p build
+          cc -std=c99 -Wall -Wextra -Werror -Icore core/starfield.c core/canvas.c tests/test_starfield.c -lm -o build/test_starfield
+          build/test_starfield
+      - name: Build
+        run: make -C linux CFLAGS="-O2 -Werror"
+      - name: Run it on a virtual display
+        run: |
+          Xvfb :99 -screen 0 1440x900x24 &
+          sleep 2
+          export DISPLAY=:99
+          timeout 6 linux/starfield -root || [ $? = 124 ]
+          linux/starfield -root -preset synthwave -accent-percent 25 -24h & PID=$!
+          sleep 5; xwd -root -silent | convert xwd:- build/linux-${{ matrix.arch }}-synthwave.png; kill $PID
+          STARFIELD_NO_SHM=1 linux/starfield -root & PID=$!
+          sleep 5; xwd -root -silent | convert xwd:- build/linux-${{ matrix.arch }}.png; kill $PID
+      - name: Package
+        run: |
+          mkdir -p build/starfield
+          cp linux/starfield linux/starfield.xml linux/install.sh LICENSE build/starfield/
+          tar -C build -czf build/starfield-linux-${{ matrix.arch }}.tar.gz starfield
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            build/starfield-linux-${{ matrix.arch }}.tar.gz
+            build/*.png
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows-build, windows-smoke, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          # The notes are this version's section of CHANGELOG.md plus install steps.
+          awk -v v="$VERSION" '$0 ~ "^## "v" " || $0 == "## "v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          cat .github/release-install.md >> notes.md
+          gh release create "$GITHUB_REF_NAME" --title "Starfield $VERSION" --notes-file notes.md \
+            dist/macos/Starfield.saver.zip \
+            dist/windows/Starfield-windows.zip \
+            dist/linux-x86_64/starfield-linux-x86_64.tar.gz \
+            dist/linux-arm64/starfield-linux-arm64.tar.gz

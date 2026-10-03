@@ -1,4 +1,5 @@
-/* Core tests: cc -std=c99 -Icore core/starfield.c tests/test_starfield.c -lm && ./a.out */
+/* Core tests: cc -std=c99 -Icore core/starfield.c core/canvas.c tests/test_starfield.c -lm && ./a.out */
+#include "canvas.h"
 #include "starfield.h"
 
 #include <stdio.h>
@@ -87,6 +88,38 @@ int main(void) {
     CHECK(sf_take_needs_clear(s));
 
     sf_destroy(s);
+
+    /* Software canvas: fades reach the background exactly, so trails never leave a haze. */
+    sf_canvas cv;
+    CHECK(sf_canvas_init(&cv, 64, 32, 1));
+    sf_color white, bg;
+    sf_parse_color("#ffffff", &white);
+    sf_parse_color("#0b0b0a", &bg);
+    sf_canvas_clear(&cv, white);
+    sf_renderer cr = sf_canvas_renderer(&cv);
+    sf_color fade = bg;
+    fade.a = 0.42f;
+    for (int i = 0; i < 40; i++) cr.fill(cr.ctx, fade);
+    CHECK(cv.pixels[0] == 0x0b0b0a && cv.pixels[64 * 32 - 1] == 0x0b0b0a);
+
+    /* Lines cover their middle and leave far pixels alone; hairlines still show. */
+    cr.line(cr.ctx, 4, 16, 60, 16, 3, white);
+    CHECK(cv.pixels[16 * 64 + 32] == 0xffffff);
+    CHECK(cv.pixels[2 * 64 + 32] == 0x0b0b0a);
+    sf_canvas_clear(&cv, bg);
+    cr.line(cr.ctx, 4, 8, 60, 8, 0.4f, white);
+    CHECK((cv.pixels[8 * 64 + 32] & 0xff) > 0x0b);
+
+    /* Clock text: width grows with the string, and drawing off the edge is safe. */
+    CHECK(sf_text_width("12:00 PM", 34) > sf_text_width("1:00", 34));
+    sf_canvas_text(&cv, "88:88 AM", -20, 40, 50, white);
+    char clock[16];
+    sf_format_time(clock, sizeof clock, 1);
+    CHECK(clock[2] == ':' && clock[5] == 0);
+    sf_format_time(clock, sizeof clock, 0);
+    CHECK(clock[0] != '0' && (clock[1] == ':' || clock[2] == ':'));
+    sf_canvas_free(&cv);
+
     if (failures) {
         fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;

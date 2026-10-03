@@ -1,0 +1,79 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+#ifndef VERSION_STR
+#define VERSION_STR "0.0.0"
+#endif
+#ifndef VERSION_NUM
+#define VERSION_NUM 0,0,0,0
+#endif
+
+1 RT_MANIFEST "starfield.manifest"
+
+/* Screen Saver Settings lists the saver by this name. */
+STRINGTABLE
+BEGIN
+    IDS_DESCRIPTION "Starfield"
+END
+
+IDD_CONFIG DIALOGEX 0, 0, 268, 214
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Starfield"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Colors", -1, 10, 8, 100, 10
+    RTEXT           "Preset", -1, 10, 24, 52, 10
+    COMBOBOX        IDC_PRESET, 68, 22, 120, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "", IDC_BACKGROUND, "Button", BS_OWNERDRAW | WS_TABSTOP, 68, 40, 30, 16
+    CONTROL         "", IDC_STARS, "Button", BS_OWNERDRAW | WS_TABSTOP, 120, 40, 30, 16
+    CONTROL         "", IDC_ACCENT, "Button", BS_OWNERDRAW | WS_TABSTOP, 172, 40, 30, 16
+    CTEXT           "Background", -1, 58, 58, 50, 9
+    CTEXT           "Stars", -1, 110, 58, 50, 9
+    CTEXT           "Accent stars", -1, 160, 58, 54, 9
+
+    LTEXT           "Flight", -1, 10, 76, 100, 10
+    RTEXT           "Accent stars", -1, 10, 92, 52, 10
+    CONTROL         "", IDC_ACCENT_PCT, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 64, 89, 150, 15
+    LTEXT           "", IDC_ACCENT_VAL, 218, 92, 44, 10
+    RTEXT           "Speed", -1, 10, 110, 52, 10
+    CONTROL         "", IDC_SPEED, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 64, 107, 150, 15
+    LTEXT           "", IDC_SPEED_VAL, 218, 110, 44, 10
+    RTEXT           "Trails", -1, 10, 128, 52, 10
+    CONTROL         "", IDC_TRAILS, TRACKBAR_CLASS, TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 64, 125, 150, 15
+    LTEXT           "", IDC_TRAILS_VAL, 218, 128, 44, 10
+
+    LTEXT           "Clock", -1, 10, 146, 100, 10
+    AUTOCHECKBOX    "Show the clock", IDC_CLOCK, 68, 160, 80, 10
+    AUTOCHECKBOX    "24-hour time", IDC_24H, 152, 160, 80, 10
+
+    PUSHBUTTON      "Reset to defaults", IDC_RESET, 10, 190, 76, 15
+    LTEXT           "", IDC_VERSION, 92, 194, 60, 10
+    DEFPUSHBUTTON   "OK", IDOK, 156, 190, 50, 15
+    PUSHBUTTON      "Cancel", IDCANCEL, 210, 190, 50, 15
+END
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VERSION_NUM
+PRODUCTVERSION  VERSION_NUM
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Max Hayim"
+            VALUE "FileDescription", "Starfield"
+            VALUE "FileVersion", VERSION_STR
+            VALUE "LegalCopyright", "(c) 2026 Max Hayim. MIT License."
+            VALUE "OriginalFilename", "Starfield.scr"
+            VALUE "ProductName", "Starfield"
+            VALUE "ProductVersion", VERSION_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

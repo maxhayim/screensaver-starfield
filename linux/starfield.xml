@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<screensaver name="starfield" _label="Starfield">
+
+  <command arg="-root"/>
+
+  <hgroup>
+    <select id="preset">
+      <option id="original" _label="Original colors"/>
+      <option id="classic" _label="Classic" arg-set="-preset classic"/>
+      <option id="deep-space" _label="Deep space" arg-set="-preset deep-space"/>
+      <option id="green-terminal" _label="Green terminal" arg-set="-preset green-terminal"/>
+      <option id="amber-terminal" _label="Amber terminal" arg-set="-preset amber-terminal"/>
+      <option id="synthwave" _label="Synthwave" arg-set="-preset synthwave"/>
+      <option id="paper" _label="Paper" arg-set="-preset paper"/>
+    </select>
+  </hgroup>
+
+  <string id="background" _label="Background color (#rrggbb, blank for the preset's)" arg="-background %"/>
+  <string id="stars" _label="Star color" arg="-stars %"/>
+  <string id="accent" _label="Accent star color" arg="-accent %"/>
+
+  <number id="accentPercent" type="slider" arg="-accent-percent %"
+          _label="Accent stars" _low-label="None" _high-label="Half"
+          low="0" high="50" default="7"/>
+
+  <number id="speed" type="slider" arg="-speed %"
+          _label="Speed" _low-label="Slow" _high-label="Fast"
+          low="25" high="300" default="100"/>
+
+  <number id="trails" type="slider" arg="-trails %"
+          _label="Trails" _low-label="Short" _high-label="Long"
+          low="0" high="95" default="58"/>
+
+  <hgroup>
+    <boolean id="clock" _label="Show the clock" arg-unset="-no-clock"/>
+    <boolean id="h24" _label="24-hour time" arg-set="-24h"/>
+    <boolean id="slow" _label="Reduce motion" arg-set="-reduce-motion"/>
+  </hgroup>
+
+  <_description>
+A 90s flight through space. Stars stream out from the center of the
+screen, leaving short streaks that fade like a CRT's afterglow, and
+about one in fourteen glows orange.
+
+https://github.com/maxhayim/screensaver-starfield
+  </_description>
+</screensaver>
