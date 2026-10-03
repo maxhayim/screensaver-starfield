@@ -1,0 +1,4 @@
+module StarfieldCore {
+    header "starfield.h"
+    export *
+}
