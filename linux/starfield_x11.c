@@ -13,7 +13,10 @@
 #include <X11/Xlib.h>
 #include <X11/Xresource.h>
 #include <X11/Xutil.h>
+#include <X11/Xft/Xft.h>
 #include <X11/extensions/XShm.h>
+#include <pwd.h>
+#include <unistd.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
@@ -36,6 +39,8 @@ typedef struct {
     const char *background, *stars, *accent;
     int accent_percent, speed_percent, trails_percent;
     int show_clock, use_24h, reduced_motion;
+    int label_mode;         /* SF_LABEL_* */
+    const char *label_text; /* for SF_LABEL_CUSTOM */
     float scale; /* 0 = from Xft.dpi */
     int root, own_window;
     Window window_id;
@@ -53,6 +58,8 @@ static void usage(void) {
             "  -trails <0-95>           how long streaks linger (default %d)\n"
             "  -clock | -no-clock       show the time (default on)\n"
             "  -24h | -12h              clock format (default 12h)\n"
+            "  -label-name | -label-user   your name, or your username, under the clock\n"
+            "  -label <text>            your own text under the clock\n"
             "  -reduce-motion           slower flight\n"
             "  -scale <n>               HiDPI scale (default from Xft.dpi)\n",
             VERSION_STR, SF_DEFAULT_ACCENT_PERCENT, SF_DEFAULT_SPEED_PERCENT, SF_DEFAULT_TRAILS_PERCENT);
@@ -109,6 +116,14 @@ static int parse_args(int argc, char **argv, options *o) {
         else if (!strcmp(a, "-24h")) o->use_24h = 1;
         else if (!strcmp(a, "-12h")) o->use_24h = 0;
         else if (!strcmp(a, "-reduce-motion")) o->reduced_motion = 1;
+        else if (!strcmp(a, "-label-name")) o->label_mode = SF_LABEL_NAME;
+        else if (!strcmp(a, "-label-user")) o->label_mode = SF_LABEL_USERNAME;
+        else if (!strcmp(a, "-label-none")) o->label_mode = SF_LABEL_NONE, o->label_text = NULL;
+        else if (TAKES("-label")) {
+            o->label_text = val;
+            if (o->label_mode == SF_LABEL_NONE) o->label_mode = SF_LABEL_CUSTOM;
+        }
+        else if (!strcmp(a, "-label-custom")) o->label_mode = SF_LABEL_CUSTOM;
         else if (!strcmp(a, "-fps") || !strcmp(a, "-no-fps")) {} /* XScreenSaver's standard flags */
         else if (!strcmp(a, "-h") || !strcmp(a, "-help") || !strcmp(a, "-version")) {
             usage();
@@ -255,6 +270,194 @@ static void put_image(surface *s) {
     XSync(s->dpy, False);
 }
 
+/* ---------- label ---------- */
+
+/* The text under the clock (UTF-8), or "" for none. */
+static void label_text(const options *o, char *out, size_t size) {
+    out[0] = 0;
+    const char *src = NULL;
+    struct passwd *pw = getpwuid(getuid());
+    char name[256];
+    if (o->label_mode == SF_LABEL_CUSTOM) {
+        src = o->label_text;
+    } else if (o->label_mode == SF_LABEL_USERNAME) {
+        src = pw ? pw->pw_name : getenv("USER");
+    } else if (o->label_mode == SF_LABEL_NAME) {
+        /* The full name is the first comma-separated field of the GECOS entry. */
+        name[0] = 0;
+        if (pw && pw->pw_gecos) {
+            size_t n = strcspn(pw->pw_gecos, ",");
+            if (n >= sizeof name) n = sizeof name - 1;
+            memcpy(name, pw->pw_gecos, n);
+            name[n] = 0;
+        }
+        src = name[0] ? name : (pw ? pw->pw_name : getenv("USER"));
+    }
+    if (!src) return;
+    while (*src == ' ' || *src == '\t') src++;
+    /* Copy up to SF_LABEL_MAX characters on one line, without cutting a UTF-8 sequence. */
+    size_t i = 0;
+    int chars = 0;
+    for (const unsigned char *p = (const unsigned char *)src; *p && chars < SF_LABEL_MAX;) {
+        size_t n = *p < 0x80 ? 1 : (*p >> 5) == 6 ? 2 : (*p >> 4) == 14 ? 3 : (*p >> 3) == 30 ? 4 : 1;
+        if (i + n >= size) break;
+        for (size_t k = 0; k < n && p[k]; k++) out[i++] = (char)(p[k] == '\n' || p[k] == '\r' || p[k] == '\t' ? ' ' : p[k]);
+        p += n;
+        chars++;
+    }
+    while (i && out[i - 1] == ' ') i--;
+    out[i] = 0;
+}
+
+/* ---- right-to-left text: Xft draws characters in the order given, so put Hebrew and Arabic in display order. */
+
+static int is_rtl(unsigned c) {
+    return (c >= 0x0590 && c <= 0x08ff) || (c >= 0xfb1d && c <= 0xfdff) || (c >= 0xfe70 && c <= 0xfeff);
+}
+
+static int is_strong_ltr(unsigned c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= 0xc0 && c < 0x590 && c != 0xd7 && c != 0xf7);
+}
+
+static int utf8_decode(const char *s, unsigned *out, int max) {
+    int n = 0;
+    const unsigned char *p = (const unsigned char *)s;
+    while (*p && n < max) {
+        unsigned c = *p;
+        int len = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+        if (len > 1) {
+            c &= 0xff >> (len + 1);
+            for (int k = 1; k < len && p[k]; k++) c = c << 6 | (p[k] & 0x3f);
+        }
+        out[n++] = c;
+        p += len;
+    }
+    return n;
+}
+
+static size_t utf8_encode(const unsigned *cps, int n, char *out, size_t size) {
+    size_t i = 0;
+    for (int k = 0; k < n; k++) {
+        unsigned c = cps[k];
+        char b[4];
+        int len;
+        if (c < 0x80) b[0] = (char)c, len = 1;
+        else if (c < 0x800) b[0] = (char)(0xc0 | c >> 6), b[1] = (char)(0x80 | (c & 0x3f)), len = 2;
+        else if (c < 0x10000) b[0] = (char)(0xe0 | c >> 12), b[1] = (char)(0x80 | (c >> 6 & 0x3f)), b[2] = (char)(0x80 | (c & 0x3f)), len = 3;
+        else b[0] = (char)(0xf0 | c >> 18), b[1] = (char)(0x80 | (c >> 12 & 0x3f)), b[2] = (char)(0x80 | (c >> 6 & 0x3f)), b[3] = (char)(0x80 | (c & 0x3f)), len = 4;
+        if (i + (size_t)len >= size) break;
+        memcpy(out + i, b, (size_t)len);
+        i += (size_t)len;
+    }
+    out[i] = 0;
+    return i;
+}
+
+static void reverse(unsigned *a, int from, int to) {
+    for (to--; from < to; from++, to--) {
+        unsigned t = a[from];
+        a[from] = a[to];
+        a[to] = t;
+    }
+}
+
+/*
+ * A small subset of the Unicode bidi algorithm, enough for names and short
+ * labels: runs of right-to-left letters (with the spaces and marks between
+ * them) are reversed, and if the text starts right-to-left, so is the order
+ * of the runs. Arabic letters aren't joined, since Xft doesn't shape.
+ */
+static void to_display_order(char *text, size_t size) {
+    unsigned cps[SF_LABEL_MAX * 2];
+    int n = utf8_decode(text, cps, (int)(sizeof cps / sizeof cps[0]));
+    int any = 0, base_rtl = -1;
+    for (int i = 0; i < n; i++) {
+        if (is_rtl(cps[i])) any = 1;
+        if (base_rtl < 0 && (is_rtl(cps[i]) || is_strong_ltr(cps[i]))) base_rtl = is_rtl(cps[i]);
+    }
+    if (!any) return;
+    if (base_rtl == 1) {
+        /* Reverse everything, then turn left-to-right runs (letters and digits) back around. */
+        reverse(cps, 0, n);
+        for (int i = 0; i < n;) {
+            if (!is_rtl(cps[i]) && cps[i] != ' ' && (is_strong_ltr(cps[i]) || (cps[i] >= '0' && cps[i] <= '9'))) {
+                int j = i;
+                while (j < n && !is_rtl(cps[j])) j++;
+                int end = j;
+                while (end > i && (cps[end - 1] == ' ' || !(is_strong_ltr(cps[end - 1]) || (cps[end - 1] >= '0' && cps[end - 1] <= '9')))) end--;
+                reverse(cps, i, end);
+                i = j;
+            } else {
+                i++;
+            }
+        }
+    } else {
+        /* Left-to-right text: reverse each right-to-left run in place. */
+        for (int i = 0; i < n;) {
+            if (is_rtl(cps[i])) {
+                int j = i;
+                while (j < n && (is_rtl(cps[j]) || (cps[j] == ' ' && j + 1 < n && is_rtl(cps[j + 1])))) j++;
+                reverse(cps, i, j);
+                i = j;
+            } else {
+                i++;
+            }
+        }
+    }
+    utf8_encode(cps, n, text, size);
+}
+
+typedef struct {
+    unsigned char *coverage;
+    int w, h;
+} text_mask;
+
+/* Renders UTF-8 `text` in the desktop's sans-serif font, `px` pixels tall, as a coverage mask. */
+static text_mask render_text(Display *dpy, Window win, const XWindowAttributes *wa, const char *text, double px) {
+    text_mask m = {NULL, 0, 0};
+    if (!text[0] || px < 4) return m;
+    XftFont *font = XftFontOpen(dpy, DefaultScreen(dpy), XFT_FAMILY, XftTypeString, "sans-serif", XFT_PIXEL_SIZE,
+                                XftTypeDouble, px, XFT_ANTIALIAS, XftTypeBool, True, NULL);
+    if (!font) return m;
+    XGlyphInfo ext;
+    XftTextExtentsUtf8(dpy, font, (const FcChar8 *)text, (int)strlen(text), &ext);
+    int w = ext.xOff + 2, h = font->ascent + font->descent;
+    if (w > 2 && h > 0 && w < 8192) {
+        Pixmap pm = XCreatePixmap(dpy, win, (unsigned)w, (unsigned)h, (unsigned)wa->depth);
+        GC gc = XCreateGC(dpy, pm, 0, NULL);
+        XSetForeground(dpy, gc, 0);
+        XFillRectangle(dpy, pm, gc, 0, 0, (unsigned)w, (unsigned)h);
+        XftDraw *draw = XftDrawCreate(dpy, pm, wa->visual, wa->colormap);
+        XRenderColor white = {0xffff, 0xffff, 0xffff, 0xffff};
+        XftColor ink;
+        if (draw && XftColorAllocValue(dpy, wa->visual, wa->colormap, &white, &ink)) {
+            XftDrawStringUtf8(draw, &ink, font, 1, font->ascent, (const FcChar8 *)text, (int)strlen(text));
+            XImage *img = XGetImage(dpy, pm, 0, 0, (unsigned)w, (unsigned)h, AllPlanes, ZPixmap);
+            unsigned long gm = wa->visual->green_mask;
+            int shift = 0;
+            while (gm && !(gm >> shift & 1)) shift++;
+            unsigned long top = gm >> shift;
+            m.coverage = img ? malloc((size_t)w * (size_t)h) : NULL;
+            if (m.coverage) {
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++) {
+                        unsigned long v = (XGetPixel(img, x, y) & gm) >> shift;
+                        m.coverage[(size_t)y * w + x] = (unsigned char)(top ? v * 255 / top : 0);
+                    }
+                m.w = w;
+                m.h = h;
+            }
+            if (img) XDestroyImage(img);
+            XftColorFree(dpy, wa->visual, wa->colormap, &ink);
+        }
+        if (draw) XftDrawDestroy(draw);
+        XFreeGC(dpy, gc);
+        XFreePixmap(dpy, pm);
+    }
+    XftFontClose(dpy, font);
+    return m;
+}
+
 /* ---------- main ---------- */
 
 static float xft_scale(Display *dpy) {
@@ -337,8 +540,11 @@ int main(int argc, char **argv) {
     float scale = opt.scale > 0 ? opt.scale : xft_scale(dpy);
     starfield *sf = sf_create((unsigned)time(NULL) ^ (unsigned)win);
     sf_color background = color_of(opt.background);
-    sf_color ink = color_of(opt.stars);
-    ink.a = 0.8f;
+
+    char label[SF_LABEL_MAX * 4 + 1];
+    label_text(&opt, label, sizeof label);
+    to_display_order(label, sizeof label);
+    text_mask label_mask = {NULL, 0, 0};
 
     int width = 0, height = 0, compact = 0;
     double last = now_s();
@@ -384,6 +590,10 @@ int main(int argc, char **argv) {
             sf_resize(sf, (float)width / k, (float)height / k);
             sf_canvas_clear(&s.trail, background);
             (void)sf_take_needs_clear(sf);
+
+            free(label_mask.coverage);
+            float ck = compact ? ((float)height / 900.0f > 0.25f ? (float)height / 900.0f : 0.25f) : 1;
+            label_mask = render_text(dpy, win, &wa, label, 14.0 * ck * k);
         }
 
         double t = now_s();
@@ -394,13 +604,22 @@ int main(int argc, char **argv) {
         sf_renderer r = sf_canvas_renderer(&s.trail);
         sf_render(sf, &r);
         sf_canvas_copy(&s.frame, &s.trail);
+        /* Bottom-left: the time in large type, with the optional label under it. */
+        float fh = (float)height / s.frame.scale;
+        float ck = compact ? (fh / 900.0f > 0.25f ? fh / 900.0f : 0.25f) : 1;
+        float bottom = fh - 32 * ck;
+        sf_color ink = color_of(opt.stars);
+        if (label_mask.coverage) {
+            ink.a = 0.5f;
+            int top = (int)(bottom * s.frame.scale + 0.5f) - label_mask.h;
+            sf_canvas_mask(&s.frame, label_mask.coverage, label_mask.w, label_mask.h, (int)(32 * ck * s.frame.scale + 0.5f), top, ink);
+            bottom = (float)top / s.frame.scale - 6 * ck;
+        }
         if (opt.show_clock) {
-            /* Bottom-left: the time in large type, like the site. */
-            float h = (float)height / s.frame.scale;
-            float k = compact ? (h / 900.0f > 0.25f ? h / 900.0f : 0.25f) : 1;
             char text[16];
             sf_format_time(text, sizeof text, opt.use_24h);
-            sf_canvas_text(&s.frame, text, 32 * k, h - 32 * k, 34 * k, ink);
+            ink.a = 0.8f;
+            sf_canvas_text(&s.frame, text, 32 * ck, bottom, 34 * ck, ink);
         }
         put_image(&s);
 

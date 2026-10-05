@@ -9,9 +9,12 @@
 #define WIN32_LEAN_AND_MEAN
 #define UNICODE
 #define _UNICODE
+#define SECURITY_WIN32
 #include <windows.h>
 #include <commctrl.h>
 #include <commdlg.h>
+#include <lm.h>
+#include <security.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +39,8 @@ typedef struct {
     int speed_percent;  /* 25..300 */
     int trails_percent; /* 0..95 */
     int show_clock, use_24h;
+    int label_mode;                      /* SF_LABEL_* */
+    wchar_t label_text[SF_LABEL_MAX + 1]; /* for SF_LABEL_CUSTOM */
 } settings;
 
 static void default_settings(settings *s) {
@@ -47,6 +52,8 @@ static void default_settings(settings *s) {
     s->trails_percent = SF_DEFAULT_TRAILS_PERCENT;
     s->show_clock = 1;
     s->use_24h = 0;
+    s->label_mode = SF_LABEL_NONE;
+    s->label_text[0] = 0;
 }
 
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -78,7 +85,14 @@ static void load_settings(settings *s) {
     read_int(key, "TrailsPercent", &s->trails_percent);
     read_int(key, "ShowClock", &s->show_clock);
     read_int(key, "Use24Hour", &s->use_24h);
+    read_int(key, "LabelMode", &s->label_mode);
+    DWORD size = sizeof s->label_text - sizeof(wchar_t), type = 0;
+    if (RegQueryValueExW(key, L"LabelText", NULL, &type, (BYTE *)s->label_text, &size) == ERROR_SUCCESS && type == REG_SZ)
+        s->label_text[size / sizeof(wchar_t)] = 0;
+    else
+        s->label_text[0] = 0;
     RegCloseKey(key);
+    s->label_mode = clampi(s->label_mode, SF_LABEL_NONE, SF_LABEL_CUSTOM);
     s->accent_percent = clampi(s->accent_percent, 0, 50);
     s->speed_percent = clampi(s->speed_percent, 25, 300);
     s->trails_percent = clampi(s->trails_percent, 0, 95);
@@ -100,6 +114,8 @@ static void save_settings(const settings *s) {
     write_int(key, "TrailsPercent", s->trails_percent);
     write_int(key, "ShowClock", s->show_clock);
     write_int(key, "Use24Hour", s->use_24h);
+    write_int(key, "LabelMode", s->label_mode);
+    RegSetValueExW(key, L"LabelText", 0, REG_SZ, (const BYTE *)s->label_text, (DWORD)((wcslen(s->label_text) + 1) * sizeof(wchar_t)));
     RegCloseKey(key);
 }
 
@@ -120,6 +136,94 @@ static int reduced_motion(void) {
     return !animations;
 }
 
+/* The text under the clock, or an empty string for none. */
+static void label_text(const settings *s, wchar_t *out, int size) {
+    out[0] = 0;
+    DWORD n = (DWORD)size;
+    if (s->label_mode == SF_LABEL_CUSTOM) {
+        wcsncpy(out, s->label_text, (size_t)size - 1);
+        out[size - 1] = 0;
+    } else if (s->label_mode == SF_LABEL_USERNAME) {
+        if (!GetUserNameW(out, &n)) out[0] = 0;
+    } else if (s->label_mode == SF_LABEL_NAME) {
+        /* The display name: from the domain, else the local account's full name, else the login. */
+        if (!GetUserNameExW(NameDisplay, out, &n) || !out[0]) {
+            wchar_t user[257];
+            DWORD un = 257;
+            out[0] = 0;
+            if (GetUserNameW(user, &un)) {
+                USER_INFO_10 *info = NULL;
+                if (NetUserGetInfo(NULL, user, 10, (BYTE **)&info) == NERR_Success && info) {
+                    if (info->usri10_full_name && info->usri10_full_name[0]) wcsncpy(out, info->usri10_full_name, (size_t)size - 1);
+                    NetApiBufferFree(info);
+                }
+                if (!out[0]) wcsncpy(out, user, (size_t)size - 1);
+                out[size - 1] = 0;
+            }
+        }
+    }
+    /* Trim spaces, and keep it to one line of SF_LABEL_MAX characters. */
+    wchar_t *p = out;
+    while (*p == L' ' || *p == L'\t') p++;
+    memmove(out, p, (wcslen(p) + 1) * sizeof(wchar_t));
+    for (wchar_t *q = out; *q; q++)
+        if (*q == L'\r' || *q == L'\n' || *q == L'\t') *q = L' ';
+    if (wcslen(out) > SF_LABEL_MAX) out[SF_LABEL_MAX] = 0;
+    size_t len = wcslen(out);
+    while (len && out[len - 1] == L' ') out[--len] = 0;
+}
+
+typedef struct {
+    unsigned char *coverage;
+    int w, h;
+} text_mask;
+
+/* Renders `text` in Segoe UI, `px` pixels tall, as a grayscale coverage mask. */
+static text_mask render_text(const wchar_t *text, int px) {
+    text_mask m = {NULL, 0, 0};
+    if (!text[0] || px < 4) return m;
+    HDC dc = CreateCompatibleDC(NULL);
+    HFONT font = CreateFontW(-px, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                             CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+    HGDIOBJ old_font = SelectObject(dc, font);
+    RECT r = {0, 0, 0, 0};
+    DrawTextW(dc, text, -1, &r, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+    int w = r.right + 2, h = r.bottom;
+    if (w > 4 && h > 0) {
+        BITMAPINFO bmi;
+        memset(&bmi, 0, sizeof bmi);
+        bmi.bmiHeader.biSize = sizeof bmi.bmiHeader;
+        bmi.bmiHeader.biWidth = w;
+        bmi.bmiHeader.biHeight = -h;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        uint32_t *bits = NULL;
+        HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, (void **)&bits, NULL, 0);
+        if (bmp && bits) {
+            HGDIOBJ old_bmp = SelectObject(dc, bmp);
+            memset(bits, 0, (size_t)w * (size_t)h * 4);
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, RGB(255, 255, 255));
+            r.left = 1, r.top = 0, r.right = w, r.bottom = h;
+            DrawTextW(dc, text, -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_LEFT);
+            GdiFlush();
+            m.coverage = malloc((size_t)w * (size_t)h);
+            if (m.coverage) {
+                for (int i = 0; i < w * h; i++) m.coverage[i] = (unsigned char)(bits[i] >> 8 & 0xff);
+                m.w = w;
+                m.h = h;
+            }
+            SelectObject(dc, old_bmp);
+        }
+        if (bmp) DeleteObject(bmp);
+    }
+    SelectObject(dc, old_font);
+    DeleteObject(font);
+    DeleteDC(dc);
+    return m;
+}
+
 /* ---------- saver windows ---------- */
 
 #define MAX_SAVERS 16
@@ -130,6 +234,7 @@ typedef struct {
     sf_canvas trail, frame;
     int width, height; /* pixels */
     float scale;
+    text_mask label;
 } saver;
 
 static saver savers[MAX_SAVERS];
@@ -175,6 +280,13 @@ static void apply_options(saver *v) {
     sf_set_options(v->sf, &o);
 }
 
+/* The clock and label shrink with the small preview. */
+static float clock_scale(const saver *v) {
+    if (!preview_mode || v->scale <= 0) return 1;
+    float h = (float)v->height / v->scale / 900.0f;
+    return h > 0.25f ? h : 0.25f;
+}
+
 static void resize_saver(saver *v) {
     RECT rc;
     GetClientRect(v->hwnd, &rc);
@@ -194,6 +306,11 @@ static void resize_saver(saver *v) {
     sf_resize(v->sf, (float)w / scale, (float)h / scale);
     sf_canvas_clear(&v->trail, parse_or(config.background, SF_PRESETS[0].background));
     (void)sf_take_needs_clear(v->sf);
+
+    free(v->label.coverage);
+    wchar_t text[SF_LABEL_MAX + 260];
+    label_text(&config, text, (int)(sizeof text / sizeof text[0]));
+    v->label = render_text(text, (int)(14.0f * clock_scale(v) * scale + 0.5f));
 }
 
 static void present(saver *v, HDC dc) {
@@ -218,15 +335,22 @@ static void draw_frame(saver *v, float dt) {
     sf_render(v->sf, &r);
     sf_canvas_copy(&v->frame, &v->trail);
 
+    /* Bottom-left: the time in large type, with the optional label under it. */
+    float h = (float)v->height / v->scale;
+    float k = clock_scale(v);
+    float bottom = h - 32 * k;
+    sf_color ink = parse_or(config.stars, SF_PRESETS[0].stars);
+    if (v->label.coverage) {
+        ink.a = 0.5f;
+        int top = (int)(bottom * v->scale + 0.5f) - v->label.h;
+        sf_canvas_mask(&v->frame, v->label.coverage, v->label.w, v->label.h, (int)(32 * k * v->scale + 0.5f), top, ink);
+        bottom = (float)top / v->scale - 8 * k;
+    }
     if (config.show_clock) {
-        /* Bottom-left: the time in large type, like the site. */
-        float h = (float)v->height / v->scale;
-        float k = preview_mode ? (h / 900.0f > 0.25f ? h / 900.0f : 0.25f) : 1.0f;
         char text[16];
         sf_format_time(text, sizeof text, config.use_24h);
-        sf_color ink = parse_or(config.stars, SF_PRESETS[0].stars);
         ink.a = 0.8f;
-        sf_canvas_text(&v->frame, text, 32 * k, h - 32 * k, 34 * k, ink);
+        sf_canvas_text(&v->frame, text, 32 * k, bottom, 34 * k, ink);
     }
 
     HDC dc = GetDC(v->hwnd);
@@ -380,6 +504,7 @@ done:
     for (int i = 0; i < saver_count; i++) {
         sf_canvas_free(&savers[i].trail);
         sf_canvas_free(&savers[i].frame);
+        free(savers[i].label.coverage);
         sf_destroy(savers[i].sf);
     }
     return 0;
@@ -401,6 +526,7 @@ static void update_labels(HWND dlg) {
     int t = editing.trails_percent;
     set_label(dlg, IDC_TRAILS_VAL, t < 30 ? L"Short" : (t < 70 ? L"Medium" : L"Long"));
     EnableWindow(GetDlgItem(dlg, IDC_24H), editing.show_clock);
+    ShowWindow(GetDlgItem(dlg, IDC_LABEL_TEXT), editing.label_mode == SF_LABEL_CUSTOM ? SW_SHOW : SW_HIDE);
 }
 
 static void select_matching_preset(HWND dlg) {
@@ -418,6 +544,8 @@ static void load_dialog(HWND dlg) {
     SendDlgItemMessageW(dlg, IDC_TRAILS, TBM_SETPOS, TRUE, editing.trails_percent);
     CheckDlgButton(dlg, IDC_CLOCK, editing.show_clock ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(dlg, IDC_24H, editing.use_24h ? BST_CHECKED : BST_UNCHECKED);
+    SendDlgItemMessageW(dlg, IDC_LABEL_MODE, CB_SETCURSEL, (WPARAM)editing.label_mode, 0);
+    SetDlgItemTextW(dlg, IDC_LABEL_TEXT, editing.label_text);
     select_matching_preset(dlg);
     update_labels(dlg);
     InvalidateRect(GetDlgItem(dlg, IDC_BACKGROUND), NULL, TRUE);
@@ -452,6 +580,10 @@ static INT_PTR CALLBACK config_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         SendDlgItemMessageW(dlg, IDC_SPEED, TBM_SETRANGE, TRUE, MAKELPARAM(5, 60)); /* x5 = 25..300% */
         SendDlgItemMessageW(dlg, IDC_TRAILS, TBM_SETRANGE, TRUE, MAKELPARAM(0, 95));
         SetDlgItemTextA(dlg, IDC_VERSION, "Version " VERSION_STR);
+        const wchar_t *modes[] = {L"Nothing", L"Your name", L"Your username", L"Custom text"};
+        for (int i = 0; i < 4; i++) SendDlgItemMessageW(dlg, IDC_LABEL_MODE, CB_ADDSTRING, 0, (LPARAM)modes[i]);
+        SendDlgItemMessageW(dlg, IDC_LABEL_TEXT, EM_SETLIMITTEXT, SF_LABEL_MAX, 0);
+        SendDlgItemMessageW(dlg, IDC_LABEL_TEXT, EM_SETCUEBANNER, TRUE, (LPARAM)L"Text under the clock");
         load_settings(&editing);
         load_dialog(dlg);
         return TRUE;
@@ -504,11 +636,20 @@ static INT_PTR CALLBACK config_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) {
         case IDC_24H:
             editing.use_24h = IsDlgButtonChecked(dlg, IDC_24H) == BST_CHECKED;
             return TRUE;
+        case IDC_LABEL_MODE:
+            if (HIWORD(wp) == CBN_SELCHANGE) {
+                int i = (int)SendDlgItemMessageW(dlg, IDC_LABEL_MODE, CB_GETCURSEL, 0, 0);
+                editing.label_mode = i >= 0 ? i : SF_LABEL_NONE;
+                update_labels(dlg);
+                if (editing.label_mode == SF_LABEL_CUSTOM) SetFocus(GetDlgItem(dlg, IDC_LABEL_TEXT));
+            }
+            return TRUE;
         case IDC_RESET:
             default_settings(&editing);
             load_dialog(dlg);
             return TRUE;
         case IDOK:
+            GetDlgItemTextW(dlg, IDC_LABEL_TEXT, editing.label_text, SF_LABEL_MAX + 1);
             save_settings(&editing);
             EndDialog(dlg, IDOK);
             return TRUE;

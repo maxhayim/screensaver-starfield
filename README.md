@@ -42,7 +42,7 @@ Starfield runs under [XScreenSaver](https://www.jwz.org/xscreensaver/). GNOME an
    ```
 3. Choose **Starfield** in `xscreensaver-settings`.
 
-To try it in a window first: `./starfield -window`. Run `./starfield -help` for every option.
+To try it in a window first: `./starfield -window`. Run `./starfield -help` for every option. Building it yourself needs `libx11-dev`, `libxext-dev`, and `libxft-dev`.
 
 ## Settings
 
@@ -53,6 +53,7 @@ On macOS, click **Options…** next to Starfield in Screen Saver settings. On Wi
 - **Speed:** from a quarter of the site's speed up to 3×.
 - **Trails:** how long the streaks linger.
 - **Clock:** the time in the bottom-left corner. Show it or hide it, in 12- or 24-hour time. It takes the star color.
+- **Under the clock:** nothing, your name, your username, or text of your own (up to 80 characters, in any language, including right-to-left scripts like Hebrew). It shows in smaller, dimmer type, even with the clock hidden.
 - **Reset to defaults** puts everything back to the original look.
 
 The flight slows down with **Reduce motion** on in macOS Accessibility settings, with **Show animations in Windows** off on Windows, and with the **Reduce motion** box on Linux.
@@ -60,7 +61,7 @@ The flight slows down with **Reduce motion** on in macOS Accessibility settings,
 ## How it works
 
 - `core/`: the drawing core in plain C99, ported from `StarfieldCanvas` on the site. It moves the stars and draws through three callbacks (`fill`, `line`, `circle`), so each OS only plugs in its own 2D drawing. The screen is never cleared. Each frame first lays a see-through coat of the background color over the last one, which leaves the trails, so each OS keeps its own drawing surface between frames.
-- `core/canvas.c`: a small software renderer for Windows and Linux. It draws anti-aliased streaks into a pixel buffer, and draws the clock with its own stroke font, so neither version needs a graphics or font library.
+- `core/canvas.c`: a small software renderer for Windows and Linux. It draws anti-aliased streaks into a pixel buffer, and draws the clock digits with its own stroke font. The text under the clock comes from the OS (GDI on Windows, Xft on Linux), so any language works.
 - `macos/`: the Swift `ScreenSaverView`, which draws with Core Graphics into an offscreen bitmap, and the Options sheet.
 - `windows/`: a plain Win32 program in C. It handles `/s` (one window per monitor), `/p` (the preview), and `/c` (the Settings dialog), and keeps its settings in the registry under `HKEY_CURRENT_USER\Software\maxhayim\Starfield`.
 - `linux/`: an XScreenSaver hack in C on plain Xlib (with shared memory when it can), plus its settings XML.
@@ -70,7 +71,7 @@ The flight slows down with **Reduce motion** on in macOS Accessibility settings,
 ```sh
 macos/build.sh            # build/Starfield.saver, universal, ad-hoc signed (needs: xcode-select --install)
 windows/build.sh          # build/Starfield.scr, with MinGW-w64 (brew install mingw-w64, or apt install mingw-w64)
-make -C linux             # linux/starfield (needs libx11-dev and libxext-dev)
+make -C linux             # linux/starfield (needs libx11-dev, libxext-dev, and libxft-dev)
 ```
 
 Test without installing:

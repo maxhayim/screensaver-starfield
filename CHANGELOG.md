@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- **Text under the clock:** show your name, your username, or text of your own under the time, in smaller type. It works in any language, including right-to-left scripts like Hebrew, and it can show even with the clock hidden. Pick it in the saver's settings on all three systems. It's off unless you turn it on.
+- Linux: building from source now also needs `libxft-dev` (the release builds already include it).
+
 ## 0.1.0
 
 The first version of Starfield, a 90s flight through space, as a native screen saver for macOS, Windows, and Linux.

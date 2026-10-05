@@ -75,6 +75,9 @@ jobs:
           }
           # Windows opens any .scr with /S and drops other arguments, so run a copy named .exe.
           Copy-Item .\Starfield.scr .\Starfield.exe
+          New-Item -Path HKCU:\Software\maxhayim\Starfield -Force | Out-Null
+          New-ItemProperty -Path HKCU:\Software\maxhayim\Starfield -Name LabelMode -PropertyType DWord -Value 3 -Force | Out-Null
+          New-ItemProperty -Path HKCU:\Software\maxhayim\Starfield -Name LabelText -PropertyType String -Value ([char]0x05DE + [char]0x05E7 + [char]0x05E1 + " " + [char]0x05D7 + [char]0x05D9 + [char]0x05D9 + [char]0x05DD + " " + [char]0x00B7 + " Office") -Force | Out-Null
           $p = Start-Process .\Starfield.exe -ArgumentList "/s" -PassThru
           Start-Sleep -Seconds 5
           Shot "windows-fullscreen"
@@ -103,7 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install X11 headers and a virtual display
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev xvfb x11-apps imagemagick
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev libxft-dev fonts-dejavu-core xvfb x11-apps imagemagick
       - name: Test the core
         run: |
           mkdir -p build
@@ -117,9 +120,9 @@ jobs:
           sleep 2
           export DISPLAY=:99
           timeout 6 linux/starfield -root || [ $? = 124 ]
-          linux/starfield -root -preset synthwave -accent-percent 25 -24h & PID=$!
+          linux/starfield -root -preset synthwave -accent-percent 25 -24h -label "מקס חיים · Office" & PID=$!
           sleep 5; xwd -root -silent | convert xwd:- build/linux-${{ matrix.arch }}-synthwave.png; kill $PID
-          STARFIELD_NO_SHM=1 linux/starfield -root & PID=$!
+          STARFIELD_NO_SHM=1 linux/starfield -root -label-user & PID=$!
           sleep 5; xwd -root -silent | convert xwd:- build/linux-${{ matrix.arch }}.png; kill $PID
       - name: Package
         run: |

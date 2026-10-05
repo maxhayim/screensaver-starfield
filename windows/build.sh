@@ -14,6 +14,6 @@ mkdir -p build/win
 $WINDRES -DVERSION_STR="\\\"$VERSION\\\"" -DVERSION_NUM="$NUM" -I windows windows/starfield.rc -O coff -o build/win/starfield.res
 $CC -std=c99 -O2 -Wall -Wextra -mwindows -DVERSION_STR="\"$VERSION\"" -Icore -Iwindows \
   core/starfield.c core/canvas.c windows/starfield_win.c build/win/starfield.res \
-  -o build/Starfield.scr -static -lcomctl32 -lcomdlg32 -lgdi32 -luser32 -ladvapi32 -lm
+  -o build/Starfield.scr -static -lcomctl32 -lcomdlg32 -lgdi32 -luser32 -ladvapi32 -lsecur32 -lnetapi32 -lm
 
 echo "Built build/Starfield.scr ($VERSION)"

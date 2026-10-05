@@ -181,21 +181,30 @@ final class StarfieldView: ScreenSaverView {
             cg.setFillColor(cgColor(parseColor(settings.background, fallback: ColorPreset.all[0].background)))
             cg.fill(bounds)
         }
-        if settings.showClock { drawClock() }
+        if settings.showClock || settings.label != nil { drawClock() }
     }
 
-    /// Bottom-left: the time in large type, like the site.
+    /// Bottom-left: the time in large type, with the optional label under it.
     private func drawClock() {
         let ink = NSColor(cgColor: cgColor(parseColor(settings.stars, fallback: ColorPreset.all[0].stars))) ?? .white
         let scale = isPreview ? max(0.25, bounds.height / 900) : 1
         let margin = 32 * scale
+        var y = margin // the view isn't flipped: y grows upward from the bottom edge
 
+        if let text = settings.label {
+            let label = NSAttributedString(string: text, attributes: [
+                .font: NSFont.systemFont(ofSize: 14 * scale, weight: .regular),
+                .foregroundColor: ink.withAlphaComponent(0.5),
+            ])
+            label.draw(at: NSPoint(x: margin, y: y))
+            y += label.size().height - 6 * scale
+        }
+        guard settings.showClock else { return }
         let time = NSAttributedString(string: clockFormatter.string(from: Date()), attributes: [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 48 * scale, weight: .semibold),
             .foregroundColor: ink.withAlphaComponent(0.8),
             .kern: -1.0 * scale,
         ])
-        // The view isn't flipped: y grows upward from the bottom edge.
-        time.draw(at: NSPoint(x: margin, y: margin))
+        time.draw(at: NSPoint(x: margin, y: y))
     }
 }

@@ -26,4 +26,8 @@ static const sf_preset SF_PRESETS[] = {
 #define SF_DEFAULT_SPEED_PERCENT 100
 #define SF_DEFAULT_TRAILS_PERCENT 58
 
+/* The line under the clock. */
+enum { SF_LABEL_NONE, SF_LABEL_NAME, SF_LABEL_USERNAME, SF_LABEL_CUSTOM };
+#define SF_LABEL_MAX 80 /* characters of custom text */
+
 #endif

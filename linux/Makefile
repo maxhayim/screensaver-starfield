@@ -1,7 +1,7 @@
 # Starfield for XScreenSaver. Needs a C compiler and the X11 headers:
-#   Debian/Ubuntu: sudo apt install build-essential libx11-dev libxext-dev
-#   Fedora:        sudo dnf install gcc make libX11-devel libXext-devel
-#   Arch:          sudo pacman -S base-devel libx11 libxext
+#   Debian/Ubuntu: sudo apt install build-essential libx11-dev libxext-dev libxft-dev
+#   Fedora:        sudo dnf install gcc make libX11-devel libXext-devel libXft-devel
+#   Arch:          sudo pacman -S base-devel libx11 libxext libxft
 # Then: make && sudo make install
 
 VERSION := $(shell cat ../VERSION)
@@ -15,7 +15,7 @@ CONFIGDIR ?= $(PREFIX)/share/xscreensaver/config
 SRC = ../core/starfield.c ../core/canvas.c starfield_x11.c
 
 starfield: $(SRC) ../core/*.h
-	$(CC) -std=c99 $(CFLAGS) -Wall -Wextra -DVERSION_STR='"$(VERSION)"' -I../core $(SRC) -o $@ -lX11 -lXext -lm $(LDFLAGS)
+	$(CC) -std=c99 $(CFLAGS) -Wall -Wextra -DVERSION_STR='"$(VERSION)"' -I../core $(shell pkg-config --cflags xft 2>/dev/null || echo -I/usr/include/freetype2) $(SRC) -o $@ -lXft -lX11 -lXext -lm $(LDFLAGS)
 
 install: starfield
 	@test -n "$(HACKDIR)" || { echo "XScreenSaver's hack directory wasn't found. Is xscreensaver installed? Or set HACKDIR=..."; exit 1; }

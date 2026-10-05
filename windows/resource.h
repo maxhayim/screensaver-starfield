@@ -14,3 +14,5 @@
 #define IDC_24H 1012
 #define IDC_RESET 1013
 #define IDC_VERSION 1014
+#define IDC_LABEL_MODE 1015
+#define IDC_LABEL_TEXT 1016

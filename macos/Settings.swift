@@ -19,6 +19,20 @@ struct ColorPreset {
     ]
 }
 
+/// What the line under the clock shows.
+enum LabelMode: Int, CaseIterable {
+    case none, fullName, username, custom
+
+    var title: String {
+        switch self {
+        case .none: return "Nothing"
+        case .fullName: return "Your name"
+        case .username: return "Your username"
+        case .custom: return "Custom text"
+        }
+    }
+}
+
 /// Everything the user can set, stored in the screen saver's own defaults domain.
 struct StarfieldSettings {
     static let moduleName = "com.maxhayim.screensaver-starfield"
@@ -31,6 +45,21 @@ struct StarfieldSettings {
     var trails = 0.58       // how long the streaks linger, 0...0.95
     var showClock = true
     var use24Hour = false
+    var labelMode = LabelMode.none
+    var labelText = ""
+
+    /// The label as it will be drawn, or nil for none.
+    var label: String? {
+        let text: String
+        switch labelMode {
+        case .none: return nil
+        case .fullName: text = NSFullUserName().isEmpty ? NSUserName() : NSFullUserName()
+        case .username: text = NSUserName()
+        case .custom: text = labelText
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(80))
+    }
 
     private static var defaults: UserDefaults? { ScreenSaverDefaults(forModuleWithName: moduleName) }
 
@@ -45,6 +74,8 @@ struct StarfieldSettings {
         if d.object(forKey: "trails") != nil { s.trails = d.double(forKey: "trails") }
         if d.object(forKey: "showClock") != nil { s.showClock = d.bool(forKey: "showClock") }
         if d.object(forKey: "use24Hour") != nil { s.use24Hour = d.bool(forKey: "use24Hour") }
+        s.labelMode = LabelMode(rawValue: d.integer(forKey: "labelMode")) ?? .none
+        s.labelText = d.string(forKey: "labelText") ?? s.labelText
         return s
     }
 
@@ -58,6 +89,8 @@ struct StarfieldSettings {
         d.set(trails, forKey: "trails")
         d.set(showClock, forKey: "showClock")
         d.set(use24Hour, forKey: "use24Hour")
+        d.set(labelMode.rawValue, forKey: "labelMode")
+        d.set(labelText, forKey: "labelText")
         d.synchronize()
     }
 }

@@ -18,11 +18,13 @@ final class ConfigureSheetController: NSObject {
     private let trailsValue = NSTextField(labelWithString: "")
     private let clockCheck = NSButton(checkboxWithTitle: "Show the clock", target: nil, action: nil)
     private let hourCheck = NSButton(checkboxWithTitle: "24-hour time", target: nil, action: nil)
+    private let labelPopup = NSPopUpButton()
+    private let labelField = NSTextField()
 
     init(settings: StarfieldSettings, onSave: @escaping (StarfieldSettings) -> Void) {
         self.settings = settings
         self.onSave = onSave
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 360),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
                           styleMask: [.titled], backing: .buffered, defer: false)
         super.init()
         build()
@@ -58,6 +60,14 @@ final class ConfigureSheetController: NSObject {
 
         let clockRow = NSStackView(views: [clockCheck, hourCheck])
         clockRow.spacing = 16
+        clockCheck.target = self
+        clockCheck.action = #selector(clockChanged)
+
+        labelPopup.addItems(withTitles: LabelMode.allCases.map(\.title))
+        labelPopup.target = self
+        labelPopup.action = #selector(labelChanged)
+        labelField.placeholderString = "Text under the clock"
+        labelField.widthAnchor.constraint(equalToConstant: 200).isActive = true
 
         let resetButton = NSButton(title: "Reset to defaults", target: self, action: #selector(resetDefaults))
         resetButton.bezelStyle = .rounded
@@ -73,6 +83,8 @@ final class ConfigureSheetController: NSObject {
             [label("Trails"), row(trailsSlider, trailsValue)],
             [header("Clock"), NSGridCell.emptyContentView],
             [NSGridCell.emptyContentView, clockRow],
+            [label("Under it"), labelPopup],
+            [NSGridCell.emptyContentView, labelField],
         ])
         grid.rowSpacing = 8
         grid.columnSpacing = 10
@@ -135,6 +147,9 @@ final class ConfigureSheetController: NSObject {
         trailsSlider.doubleValue = settings.trails
         clockCheck.state = settings.showClock ? .on : .off
         hourCheck.state = settings.use24Hour ? .on : .off
+        labelPopup.selectItem(at: settings.labelMode.rawValue)
+        labelField.stringValue = settings.labelText
+        labelChanged()
         selectMatchingPreset()
         sliderChanged()
     }
@@ -148,6 +163,8 @@ final class ConfigureSheetController: NSObject {
         settings.trails = trailsSlider.doubleValue
         settings.showClock = clockCheck.state == .on
         settings.use24Hour = hourCheck.state == .on
+        settings.labelMode = LabelMode(rawValue: labelPopup.indexOfSelectedItem) ?? .none
+        settings.labelText = String(labelField.stringValue.prefix(80))
     }
 
     private func selectMatchingPreset() {
@@ -190,6 +207,16 @@ final class ConfigureSheetController: NSObject {
         speedValue.stringValue = String(format: "%.2g×", (speedSlider.doubleValue * 20).rounded() / 20)
         let t = trailsSlider.doubleValue
         trailsValue.stringValue = t < 0.3 ? "Short" : t < 0.7 ? "Medium" : "Long"
+    }
+
+    @objc private func labelChanged() {
+        let mode = LabelMode(rawValue: labelPopup.indexOfSelectedItem) ?? .none
+        labelField.isHidden = mode != .custom
+        if mode == .custom { window.makeFirstResponder(labelField) }
+    }
+
+    @objc private func clockChanged() {
+        hourCheck.isEnabled = clockCheck.state == .on
     }
 
     @objc private func resetDefaults() {

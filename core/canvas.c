@@ -316,6 +316,19 @@ void sf_canvas_text(sf_canvas *c, const char *text, float x, float bottom, float
     free(m.cover);
 }
 
+void sf_canvas_mask(sf_canvas *c, const unsigned char *coverage, int w, int h, int x, int y, sf_color color) {
+    paint ink = {c, pack(color), color.a};
+    for (int j = 0; j < h; j++) {
+        int py = y + j;
+        if (py < 0 || py >= c->height) continue;
+        for (int i = 0; i < w; i++) {
+            int px = x + i;
+            unsigned char v = coverage[(size_t)j * w + i];
+            if (v && px >= 0 && px < c->width) plot_blend(&ink, px, py, (float)v / 255.0f);
+        }
+    }
+}
+
 void sf_format_time(char *out, int size, int use_24h) {
     time_t now = time(NULL);
     struct tm *t = localtime(&now);

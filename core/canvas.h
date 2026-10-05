@@ -43,6 +43,12 @@ sf_renderer sf_canvas_renderer(sf_canvas *c);
 void sf_canvas_text(sf_canvas *c, const char *text, float x, float bottom, float height, sf_color color);
 float sf_text_width(const char *text, float height);
 
+/*
+ * Paints text the OS rendered: `coverage` is a w x h grayscale mask (0..255,
+ * one byte per pixel) placed with its top-left at pixel (x, y).
+ */
+void sf_canvas_mask(sf_canvas *c, const unsigned char *coverage, int w, int h, int x, int y, sf_color color);
+
 /* The local time as "7:05 PM", or "19:05" when use_24h is set. */
 void sf_format_time(char *out, int size, int use_24h);
 

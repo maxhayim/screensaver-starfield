@@ -38,6 +38,14 @@
     <boolean id="slow" _label="Reduce motion" arg-set="-reduce-motion"/>
   </hgroup>
 
+  <select id="labelMode">
+    <option id="none" _label="Nothing under the clock"/>
+    <option id="name" _label="Your name under the clock" arg-set="-label-name"/>
+    <option id="user" _label="Your username under the clock" arg-set="-label-user"/>
+    <option id="custom" _label="Custom text under the clock" arg-set="-label-custom"/>
+  </select>
+  <string id="label" _label="Custom text" arg="-label %"/>
+
   <_description>
 A 90s flight through space. Stars stream out from the center of the
 screen, leaving short streaks that fade like a CRT's afterglow, and
