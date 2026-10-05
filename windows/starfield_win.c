@@ -178,6 +178,16 @@ typedef struct {
     int w, h;
 } text_mask;
 
+/* Text whose first letter is Hebrew, Arabic, etc. reads right to left as a whole, as on macOS and Linux. */
+static int starts_rtl(const wchar_t *t) {
+    for (; *t; t++) {
+        wchar_t c = *t;
+        if ((c >= 0x0590 && c <= 0x08ff) || (c >= 0xfb1d && c <= 0xfdff) || (c >= 0xfe70 && c <= 0xfeff)) return 1;
+        if ((c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') || (c >= 0xc0 && c < 0x590 && c != 0xd7 && c != 0xf7)) return 0;
+    }
+    return 0;
+}
+
 /* Renders `text` in Segoe UI, `px` pixels tall, as a grayscale coverage mask. */
 static text_mask render_text(const wchar_t *text, int px) {
     text_mask m = {NULL, 0, 0};
@@ -187,7 +197,7 @@ static text_mask render_text(const wchar_t *text, int px) {
                              CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
     HGDIOBJ old_font = SelectObject(dc, font);
     RECT r = {0, 0, 0, 0};
-    DrawTextW(dc, text, -1, &r, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+    DrawTextW(dc, text, -1, &r, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX | (starts_rtl(text) ? DT_RTLREADING : 0));
     int w = r.right + 2, h = r.bottom;
     if (w > 4 && h > 0) {
         BITMAPINFO bmi;
@@ -206,7 +216,7 @@ static text_mask render_text(const wchar_t *text, int px) {
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, RGB(255, 255, 255));
             r.left = 1, r.top = 0, r.right = w, r.bottom = h;
-            DrawTextW(dc, text, -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_LEFT);
+            DrawTextW(dc, text, -1, &r, DT_SINGLELINE | DT_NOPREFIX | DT_LEFT | (starts_rtl(text) ? DT_RTLREADING : 0));
             GdiFlush();
             m.coverage = malloc((size_t)w * (size_t)h);
             if (m.coverage) {
