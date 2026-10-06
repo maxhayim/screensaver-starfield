@@ -8,9 +8,9 @@
   </a>
 </p>
 
-# 🌌 Starfield Screensaver
+# Starfield Screensaver
 
-A 90s flight through space, on **Windows, macOS, and Linux**. Stars stream out from the center of the screen, leaving short streaks that fade like a CRT's afterglow, and about one in fourteen glows orange. It started on [maxhayim.com](https://maxhayim.com).
+A 90s flight through space, on **Windows, macOS, and Linux**. Stars stream out from the center of the screen, leaving short streaks that fade like a CRT's afterglow, and about one in fourteen glows orange. See it live on [maxhayim.com](https://maxhayim.com).
 
 <p align="center">
   <img src="docs/assets/screenshot.png" alt="The Starfield screen saver" width="760"/>
