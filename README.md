@@ -1,91 +1,184 @@
-# Starfield — a screen saver
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Starfield screen saver" width="200"/>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Windows, macOS, Linux">
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+  </a>
+</p>
 
-A 90s flight through space. Stars stream out from the center of the screen, leaving short streaks that fade like a CRT's afterglow, and about one in fourteen glows orange. It started life on [maxhayim.com](https://maxhayim.com).
+# 🌌 Starfield Screensaver
 
-## Platforms
+A 90s flight through space, on **Windows, macOS, and Linux**. Stars stream out from the center of the screen, leaving short streaks that fade like a CRT's afterglow, and about one in fourteen glows orange. It started on [maxhayim.com](https://maxhayim.com).
 
-| OS | Status |
+<p align="center">
+  <img src="docs/assets/screenshot.png" alt="The Starfield screen saver" width="760"/>
+</p>
+
+This repository contains:
+- **core/** — the flight and a small software renderer in plain C, shared by all three systems
+- **macos/** — the `.saver` for macOS (Swift)
+- **windows/** — the `.scr` for Windows (C, GDI)
+- **linux/** — the XScreenSaver hack for Linux (C, Xlib)
+- **tests/** and **tools/** — tests and preview renderers
+- **docs/** — the developer guide, the logo, and the screenshot
+
+---
+
+## What it shows
+
+| On screen | What it means |
 | --- | --- |
-| macOS 11 and later (Apple silicon and Intel) | ✅ `Starfield.saver` |
-| Windows 10 and 11 (64-bit) | ✅ `Starfield.scr` |
-| Linux and other Unix desktops, with XScreenSaver (x86_64 and arm64) | ✅ `starfield` |
+| **Stars** | Streaming out from the center as you fly through them; closer stars are brighter, thicker, and faster |
+| **Streaks** | Where each star just was, fading like a CRT's afterglow |
+| **Accent stars** | About one in fourteen stars, orange unless you pick another color |
+| **Clock** | The time in the bottom-left corner, with your name, your username, or your own text under it if you like |
 
-## Install on macOS
+Design goals:
+- Free, with nothing to sign up for
+- Offline: it never connects to anything
+- Your colors, with presets to start from
+- Small native programs on every system, no web view
 
-1. Download `Starfield.saver.zip` from [Releases](../../releases) and unzip it.
-2. Double-click `Starfield.saver` and choose to install it for this user.
-3. The saver isn't notarized by Apple, so macOS blocks it the first time. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. Or run this in Terminal:
-   ```sh
+---
+
+## Installing
+
+Download the file for your computer from the [latest release](https://github.com/maxhayim/screensaver-starfield/releases/latest):
+
+| System | File |
+| --- | --- |
+| macOS 11 and later (Apple silicon and Intel) | `screensaver-starfield-<version>-macos.zip` |
+| Windows 10 and 11 (64-bit) | `screensaver-starfield-<version>-windows.zip` |
+| Linux with XScreenSaver (x86-64) | `screensaver-starfield-<version>-linux-x86_64.tar.gz` |
+| Linux with XScreenSaver (64-bit ARM, like a Raspberry Pi 4 or 5) | `screensaver-starfield-<version>-linux-arm64.tar.gz` |
+
+Starfield isn't code-signed or notarized (that costs money every year), so macOS and Windows warn you the first time. The steps below get you past that once.
+
+### macOS
+
+1. Unzip and double-click `Starfield.saver`, then choose to install it for this user.
+2. macOS blocks it the first time. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**. Or run this in Terminal:
+   ```
    xattr -d com.apple.quarantine ~/Library/Screen\ Savers/Starfield.saver
    ```
-4. Choose **Starfield** in **System Settings → Screen Saver**.
+3. Choose **Starfield** in **System Settings → Screen Saver**, and click **Options…** to set it up.
 
-## Install on Windows
+### Windows
 
-1. Download `Starfield-windows.zip` from [Releases](../../releases) and unzip it.
-2. Right-click `Starfield.scr`, choose **Properties**, tick **Unblock**, and click **OK**. Windows marks downloaded files, and screen savers from marked files don't start.
-3. Move `Starfield.scr` to a folder where it can stay. To offer it to every user, put it in `C:\Windows\System32` (this needs an administrator).
-4. Right-click it and choose **Install**. Screen Saver Settings opens with Starfield picked.
+1. Unzip, and keep `Starfield.scr` somewhere permanent, like `Documents\Starfield`.
+2. Right-click `Starfield.scr` and choose **Install**. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**. If it doesn't start at all, right-click it, choose **Properties**, tick **Unblock**, and click **OK**.
+3. In **Screen Saver Settings**, choose **Starfield** and click **Settings** to set it up.
 
-It isn't code-signed, so SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
+### Linux
 
-## Install on Linux
+1. Install XScreenSaver if you don't have it (for example `sudo apt install xscreensaver`).
+2. Unpack the tarball and run `./install.sh`.
+3. Choose **Starfield** in `xscreensaver-settings`. Try it in a window first with `./screensaver-starfield -window`.
 
-Starfield runs under [XScreenSaver](https://www.jwz.org/xscreensaver/). GNOME and KDE don't support third-party screen savers, so install XScreenSaver first if you don't have it (`sudo apt install xscreensaver`, or your distribution's package).
+GNOME and KDE don't support third-party screen savers, so XScreenSaver is the way to run it on Linux.
 
-1. Download the tarball for your machine from [Releases](../../releases): `x86_64` for most PCs, `arm64` for a Raspberry Pi 4 or 5 on a 64-bit OS, or other 64-bit ARM.
-2. Install it:
-   ```sh
-   tar xzf starfield-linux-*.tar.gz && cd starfield
-   sudo ./install.sh     # copies the saver and its settings into place
-   ./install.sh --add    # adds it to your XScreenSaver list
-   ```
-3. Choose **Starfield** in `xscreensaver-settings`.
+### Updating
 
-To try it in a window first: `./starfield -window`. Run `./starfield -help` for every option. Building it yourself needs `libx11-dev`, `libxext-dev`, and `libxft-dev`.
+Install the new release over the old one: double-click the new `Starfield.saver` on macOS, replace `Starfield.scr` in the same folder on Windows, or run the new `install.sh` on Linux. Your settings carry over.
 
-## Settings
+---
 
-On macOS, click **Options…** next to Starfield in Screen Saver settings. On Windows, click **Settings…** in Screen Saver Settings. On Linux, use the settings panel in `xscreensaver-settings`. All three offer:
+## Using it
 
-- **Colors:** background, stars, and accent stars, each with its own color picker. Presets: Original, Classic, Deep space, Green terminal, Amber terminal, Synthwave, and Paper.
-- **Accent stars:** how many stars get the accent color, from 0 to 50%. The site uses 7%.
-- **Speed:** from a quarter of the site's speed up to 3×.
+### Colors
+
+Pick the background, stars, and accent stars, or start from a preset: **Original**, **Classic**, **Deep space**, **Green terminal**, **Amber terminal**, **Synthwave**, or **Paper**.
+
+### Flight
+
+- **Accent stars:** how many stars get the accent color, from none to half. The original is 7%.
+- **Speed:** from a quarter of the original speed up to 3×.
 - **Trails:** how long the streaks linger.
-- **Clock:** the time in the bottom-left corner. Show it or hide it, in 12- or 24-hour time. It takes the star color.
-- **Under the clock:** nothing, your name, your username, or text of your own (up to 80 characters, in any language, including right-to-left scripts like Hebrew). It shows in smaller, dimmer type, even with the clock hidden.
-- **Reset to defaults** puts everything back to the original look.
 
-The flight slows down with **Reduce motion** on in macOS Accessibility settings, with **Show animations in Windows** off on Windows, and with the **Reduce motion** box on Linux.
+The flight also slows down when your system asks for less motion: **Reduce motion** on macOS, **Show animations in Windows** turned off on Windows, or the **Reduce motion** box on Linux.
 
-## How it works
+### Clock and label
 
-- `core/`: the drawing core in plain C99, ported from `StarfieldCanvas` on the site. It moves the stars and draws through three callbacks (`fill`, `line`, `circle`), so each OS only plugs in its own 2D drawing. The screen is never cleared. Each frame first lays a see-through coat of the background color over the last one, which leaves the trails, so each OS keeps its own drawing surface between frames.
-- `core/canvas.c`: a small software renderer for Windows and Linux. It draws anti-aliased streaks into a pixel buffer, and draws the clock digits with its own stroke font. The text under the clock comes from the OS (GDI on Windows, Xft on Linux), so any language works.
-- `macos/`: the Swift `ScreenSaverView`, which draws with Core Graphics into an offscreen bitmap, and the Options sheet.
-- `windows/`: a plain Win32 program in C. It handles `/s` (one window per monitor), `/p` (the preview), and `/c` (the Settings dialog), and keeps its settings in the registry under `HKEY_CURRENT_USER\Software\maxhayim\Starfield`.
-- `linux/`: an XScreenSaver hack in C on plain Xlib (with shared memory when it can), plus its settings XML.
+Show the clock or hide it, in 12- or 24-hour time. The line under it can show **your name** (the full name on your computer account), **your username**, or **your own text**, in any language. It's off unless you turn it on, and it stays even with the clock hidden.
 
-## Build
+### Where the settings are
 
-```sh
-macos/build.sh            # build/Starfield.saver, universal, ad-hoc signed (needs: xcode-select --install)
-windows/build.sh          # build/Starfield.scr, with MinGW-w64 (brew install mingw-w64, or apt install mingw-w64)
-make -C linux             # linux/starfield (needs libx11-dev, libxext-dev, and libxft-dev)
+- **macOS:** **Options…** next to Starfield in **System Settings → Screen Saver**
+- **Windows:** **Settings** in **Screen Saver Settings**
+- **Linux:** the Starfield page in `xscreensaver-settings`, or flags on the command line (`./screensaver-starfield -help`)
+
+---
+
+## Privacy
+
+- Starfield never connects to the internet or any other computer.
+- It keeps only its own settings: in the screen saver's preferences on macOS, in the registry under `HKEY_CURRENT_USER\Software\maxhayim\Starfield` on Windows, and in `~/.xscreensaver` on Linux.
+- The name or text under the clock is shown to anyone who can see your screen, so it's off by default.
+
+---
+
+## Repository layout
+
+```
+core/starfield.c      the flight, drawn through three callbacks (fill, line, circle)
+core/canvas.c         the software renderer for Windows and Linux, and the clock's font
+core/presets.h        color presets and defaults
+macos/                the .saver: the view, the Options sheet, settings, thumbnails
+windows/              the .scr: Win32 + GDI, the settings dialog, install notes
+linux/                the XScreenSaver hack, its settings XML, installer, and install notes
+tests/                core and renderer tests
+tools/                preview renderers for macOS and for Windows/Linux drawing
+docs/GUIDE.md         developer guide
+docs/assets/          logo and screenshot
 ```
 
-Test without installing:
+---
 
-```sh
-cc -std=c99 -Icore core/starfield.c core/canvas.c tests/test_starfield.c -lm -o build/test_starfield && build/test_starfield
-swiftc tools/preview.swift -o build/preview -framework ScreenSaver
-build/preview build/Starfield.saver shot.png 5           # macOS: render 5 seconds to a PNG
-cc -std=c99 -O2 -Icore core/starfield.c core/canvas.c tools/render.c -lm -o build/render
-build/render shot.bmp 5                                  # Windows/Linux drawing, on any OS
+## Changing it
+
+See [docs/GUIDE.md](docs/GUIDE.md).
+
+```
+macos/build.sh        # build/Starfield.saver (needs the Xcode command-line tools)
+windows/build.sh      # build/Starfield.scr (cross-compiles with mingw-w64)
+make -C linux         # build/screensaver-starfield (needs libx11, libxext, and libxft dev packages)
 ```
 
-GitHub Actions builds all three on every push, runs the tests, and runs the Windows and Linux savers to take screenshots. Pushing a tag like `v0.1.0` publishes a release with the downloads.
+GitHub Actions builds and tests all three on every push, and publishes a release for every version tag.
+
+---
+
+## Versioning
+
+This project follows semantic versioning.
+
+- **v0.3.0** — a picture in the macOS screen saver list, install notes in every download, and the Linux program renamed `screensaver-starfield`
+- **v0.2.0** — your name, your username, or your own text under the clock
+- **v0.1.0** — the Starfield screen saver for macOS, Windows, and Linux
+
+See [CHANGELOG.md](CHANGELOG.md) for details.
+
+---
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+This project is licensed under the MIT License.
+
+See the [LICENSE](LICENSE) file for details.  
+Full license text: https://opensource.org/licenses/MIT
+
+---
+
+## Contributing
+
+Pull requests are welcome. Open an issue first to discuss ideas or report bugs. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Acknowledgments
+
+* The original starfield on [maxhayim.com](https://maxhayim.com)
+* [XScreenSaver](https://www.jwz.org/xscreensaver/) by Jamie Zawinski
+* [Xft](https://gitlab.freedesktop.org/xorg/lib/libxft) for text on Linux, and [MinGW-w64](https://www.mingw-w64.org/) for building on Windows

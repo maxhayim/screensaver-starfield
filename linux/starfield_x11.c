@@ -48,7 +48,7 @@ typedef struct {
 
 static void usage(void) {
     fprintf(stderr,
-            "starfield %s: a 90s flight through space, for XScreenSaver.\n"
+            "screensaver-starfield %s: a 90s flight through space, for XScreenSaver.\n"
             "  -root | -window | -window-id <id>   where to draw\n"
             "  -preset <name>                      original, classic, deep-space, green-terminal,\n"
             "                                      amber-terminal, synthwave, paper\n"
@@ -102,7 +102,7 @@ static int parse_args(int argc, char **argv, options *o) {
             int found = 0;
             for (int p = 0; p < SF_PRESET_COUNT; p++)
                 if (same_name(val, SF_PRESETS[p].name)) preset = &SF_PRESETS[p], found = 1;
-            if (!found) fprintf(stderr, "starfield: unknown preset \"%s\"\n", val);
+            if (!found) fprintf(stderr, "screensaver-starfield: unknown preset \"%s\"\n", val);
         }
         else if (TAKES("-background")) bg = val;
         else if (TAKES("-stars")) st = val;
@@ -129,7 +129,7 @@ static int parse_args(int argc, char **argv, options *o) {
             usage();
             exit(0);
         } else {
-            fprintf(stderr, "starfield: unknown option %s\n", argv[i]);
+            fprintf(stderr, "screensaver-starfield: unknown option %s\n", argv[i]);
             usage();
             return 0;
         }
@@ -500,7 +500,7 @@ int main(int argc, char **argv) {
 
     Display *dpy = XOpenDisplay(NULL);
     if (!dpy) {
-        fprintf(stderr, "starfield: can't open display\n");
+        fprintf(stderr, "screensaver-starfield: can't open display\n");
         return 1;
     }
     int screen = DefaultScreen(dpy);
@@ -525,7 +525,7 @@ int main(int argc, char **argv) {
 
     XWindowAttributes wa;
     if (!XGetWindowAttributes(dpy, win, &wa)) {
-        fprintf(stderr, "starfield: no such window 0x%lx\n", (unsigned long)win);
+        fprintf(stderr, "screensaver-starfield: no such window 0x%lx\n", (unsigned long)win);
         return 1;
     }
 
@@ -574,7 +574,7 @@ int main(int argc, char **argv) {
             compact = width < 600 && height < 600;
             float k = compact ? 1 : scale;
             if (!make_image(&s, width, height, k)) {
-                fprintf(stderr, "starfield: out of memory\n");
+                fprintf(stderr, "screensaver-starfield: out of memory\n");
                 return 1;
             }
             sf_options o = sf_default_options();

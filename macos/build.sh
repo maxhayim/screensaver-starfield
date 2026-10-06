@@ -23,6 +23,8 @@ done
 
 lipo -create build/obj/arm64/Starfield build/obj/x86_64/Starfield -output "$OUT/Contents/MacOS/Starfield"
 sed "s/__VERSION__/$VERSION/g" macos/Info.plist > "$OUT/Contents/Info.plist"
+# thumbnail.png and @2x: the picture in System Settings' screen saver list.
+cp macos/Resources/* "$OUT/Contents/Resources/"
 # Dropbox and Finder attach extended attributes that codesign rejects.
 xattr -cr "$OUT"
 codesign --force --sign - "$OUT"

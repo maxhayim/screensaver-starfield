@@ -1,8 +1,8 @@
-# Builds every platform, runs the tests, and runs the Windows and Linux
-# savers for a few seconds to take screenshots (see the run's artifacts).
-# On a version tag (v1.2.3) it also publishes the GitHub release.
 name: Build
 
+# Every push builds and tests all three platforms and takes screenshots
+# (see each run's artifacts). A v* tag also publishes a GitHub release with
+# the downloads attached.
 on:
   push:
     branches: [main]
@@ -17,146 +17,209 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Test the core
+      - uses: actions/checkout@v5
+      - name: Core tests
         run: |
           mkdir -p build
           cc -std=c99 -Wall -Wextra -Werror -Icore core/starfield.c core/canvas.c tests/test_starfield.c -lm -o build/test_starfield
           build/test_starfield
       - name: Build Starfield.saver
         run: macos/build.sh
-      - name: Render a frame
+      - name: Render screenshots
         run: |
           swiftc tools/preview.swift -o build/preview -framework ScreenSaver
-          build/preview build/Starfield.saver build/macos.png 4
+          mkdir -p shots
+          build/preview build/Starfield.saver shots/macos.png 4
+          build/preview build/Starfield.saver shots/macos-thumbnail.png 3 300 180 --preview
       - name: Package
-        run: ditto -c -k --keepParent build/Starfield.saver build/Starfield.saver.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: |
-            build/Starfield.saver.zip
-            build/macos.png
-
-  windows-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install MinGW-w64
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
-      - name: Build Starfield.scr
         run: |
-          CC=x86_64-w64-mingw32-gcc WINDRES=x86_64-w64-mingw32-windres windows/build.sh
-          cd build && zip -9 Starfield-windows.zip Starfield.scr
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: |
-            build/Starfield.scr
-            build/Starfield-windows.zip
-
-  windows-smoke:
-    needs: windows-build
-    runs-on: windows-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows
-      - name: Run it and take screenshots
-        shell: pwsh
-        run: |
-          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          function Shot($name) {
-            $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
-            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-            $g = [System.Drawing.Graphics]::FromImage($bmp)
-            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
-            $bmp.Save("$PWD\$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
-          }
-          # Windows opens any .scr with /S and drops other arguments, so run a copy named .exe.
-          Copy-Item .\Starfield.scr .\Starfield.exe
-          New-Item -Path HKCU:\Software\maxhayim\Starfield -Force | Out-Null
-          New-ItemProperty -Path HKCU:\Software\maxhayim\Starfield -Name LabelMode -PropertyType DWord -Value 3 -Force | Out-Null
-          New-ItemProperty -Path HKCU:\Software\maxhayim\Starfield -Name LabelText -PropertyType String -Value ([char]0x05DE + [char]0x05E7 + [char]0x05E1 + " " + [char]0x05D7 + [char]0x05D9 + [char]0x05D9 + [char]0x05DD + " " + [char]0x00B7 + " Office") -Force | Out-Null
-          $p = Start-Process .\Starfield.exe -ArgumentList "/s" -PassThru
-          Start-Sleep -Seconds 5
-          Shot "windows-fullscreen"
-          if ($p.HasExited) { throw "Starfield /s exited early with $($p.ExitCode)" }
-          Stop-Process -Id $p.Id
-          Start-Sleep -Seconds 1
-          $c = Start-Process .\Starfield.exe -ArgumentList "/c" -PassThru
-          Start-Sleep -Seconds 3
-          Shot "windows-options"
-          if ($c.HasExited) { throw "Starfield /c exited early with $($c.ExitCode)" }
-          Stop-Process -Id $c.Id
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-screenshots
-          path: "*.png"
+          VERSION=$(cat VERSION)
+          mkdir -p dist
+          ditto -c -k --keepParent build/Starfield.saver "dist/screensaver-starfield-$VERSION-macos.zip"
+      - uses: actions/upload-artifact@v5
+        with: { name: macos, path: dist/ }
+      - uses: actions/upload-artifact@v5
+        with: { name: screenshots-macos, path: shots/ }
 
   linux:
     strategy:
       matrix:
         include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-          - arch: arm64
-            runner: ubuntu-22.04-arm
+          - { arch: x86_64, runner: ubuntu-22.04 }
+          - { arch: arm64, runner: ubuntu-22.04-arm }
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Install X11 headers and a virtual display
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev libxft-dev fonts-dejavu-core xvfb x11-apps imagemagick
-      - name: Test the core
+      - uses: actions/checkout@v5
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxext-dev libxft-dev pkg-config fonts-dejavu-core xvfb x11-apps imagemagick libxml2-utils
+      - name: Core tests
         run: |
           mkdir -p build
           cc -std=c99 -Wall -Wextra -Werror -Icore core/starfield.c core/canvas.c tests/test_starfield.c -lm -o build/test_starfield
           build/test_starfield
       - name: Build
         run: make -C linux CFLAGS="-O2 -Werror"
-      - name: Run it on a virtual display
+      - name: Run under X and take screenshots
         run: |
+          mkdir -p shots
           Xvfb :99 -screen 0 1440x900x24 &
           sleep 2
           export DISPLAY=:99
-          timeout 6 linux/starfield -root || [ $? = 124 ]
-          linux/starfield -root -preset synthwave -accent-percent 25 -24h -label "מקס חיים · Office" & PID=$!
-          sleep 5; xwd -root -silent | convert xwd:- build/linux-${{ matrix.arch }}-synthwave.png; kill $PID
-          STARFIELD_NO_SHM=1 linux/starfield -root -label-user & PID=$!
-          sleep 5; xwd -root -silent | convert xwd:- build/linux-${{ matrix.arch }}.png; kill $PID
+          set +e
+          timeout 5 build/screensaver-starfield -root; code=$?
+          [ $code -eq 124 ] || { echo "-root exited with $code"; exit 1; }
+          set -e
+          build/screensaver-starfield -root -preset synthwave -accent-percent 25 -24h -label "מקס חיים · Office" & PID=$!
+          sleep 5; xwd -root -silent | convert xwd:- shots/linux-${{ matrix.arch }}-synthwave.png; kill $PID
+          STARFIELD_NO_SHM=1 build/screensaver-starfield -root -label-user & PID=$!
+          sleep 5; xwd -root -silent | convert xwd:- shots/linux-${{ matrix.arch }}.png; kill $PID
+      - name: Run inside XScreenSaver
+        if: matrix.arch == 'x86_64'
+        run: |
+          sudo apt-get install -y xscreensaver
+          xmllint --noout linux/screensaver-starfield.xml
+          export PATH="$PWD/build:$PATH"
+          cat > ~/.xscreensaver <<'XS'
+          mode: one
+          selected: 0
+          splash: False
+          lock: False
+          programs: screensaver-starfield -root -label-name \n\
+
+          XS
+          Xvfb :42 -screen 0 1280x800x24 &
+          export DISPLAY=:42
+          sleep 2
+          xscreensaver -no-splash &
+          sleep 3
+          xscreensaver-command -activate
+          sleep 5
+          pgrep -af "screensaver-starfield -root"
+          xwd -root -silent | convert xwd:- shots/linux-xscreensaver.png
       - name: Package
         run: |
-          mkdir -p build/starfield
-          cp linux/starfield linux/starfield.xml linux/install.sh LICENSE build/starfield/
-          tar -C build -czf build/starfield-linux-${{ matrix.arch }}.tar.gz starfield
-      - uses: actions/upload-artifact@v4
+          make -C linux tarball ARCH=${{ matrix.arch }}
+          mkdir -p dist && cp build/screensaver-starfield-*.tar.gz dist/
+      - uses: actions/upload-artifact@v5
         with:
           name: linux-${{ matrix.arch }}
-          path: |
-            build/starfield-linux-${{ matrix.arch }}.tar.gz
-            build/*.png
+          path: dist/
+      - uses: actions/upload-artifact@v5
+        with:
+          name: screenshots-linux-${{ matrix.arch }}
+          path: shots/
+
+  windows-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - name: Build Starfield.scr
+        run: CC=x86_64-w64-mingw32-gcc WINDRES=x86_64-w64-mingw32-windres windows/build.sh
+      - name: Package
+        run: |
+          VERSION=$(cat VERSION)
+          mkdir -p dist pkg
+          cp build/Starfield.scr windows/INSTALL.txt LICENSE pkg/
+          (cd pkg && zip -q "../dist/screensaver-starfield-$VERSION-windows.zip" *)
+      - uses: actions/upload-artifact@v5
+        with: { name: windows, path: dist/ }
+      - uses: actions/upload-artifact@v5
+        with: { name: windows-scr, path: build/Starfield.scr }
+
+  windows-test:
+    needs: windows-build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with: { name: windows-scr, path: bin }
+      - name: Run as a real screen saver
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($path) {
+            $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+            $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          New-Item -ItemType Directory shots | Out-Null
+          # Windows opens any .scr with /S and drops other arguments, so run a copy named .exe.
+          Copy-Item bin\Starfield.scr bin\Starfield.exe
+          $key = 'HKCU:\Software\maxhayim\Starfield'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name LabelMode -PropertyType DWord -Value 3 -Force | Out-Null
+          $label = [string]::new([char[]]@(0x05DE,0x05E7,0x05E1,0x20,0x05D7,0x05D9,0x05D9,0x05DD)) + " " + [char]0x00B7 + " Office"
+          New-ItemProperty -Path $key -Name LabelText -PropertyType String -Value $label -Force | Out-Null
+
+          # Full screen (/s): it should keep running until there's input.
+          $p = Start-Process bin\Starfield.exe -ArgumentList '/s' -PassThru
+          Start-Sleep 5
+          Shot shots\windows-fullscreen.png
+          if ($p.HasExited) { throw "/s exited by itself with code $($p.ExitCode)" }
+          Stop-Process $p.Id
+          Start-Sleep 1
+
+          # Preview (/p): draws inside a parent window and quits when that window closes.
+          $form = New-Object System.Windows.Forms.Form
+          $form.Width = 320; $form.Height = 220; $form.StartPosition = 'Manual'; $form.Left = 40; $form.Top = 40
+          $form.Text = 'preview host'
+          $form.Show()
+          $p = Start-Process bin\Starfield.exe -ArgumentList '/p', $form.Handle.ToInt64() -PassThru
+          for ($i = 0; $i -lt 30; $i++) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100 }
+          Shot shots\windows-preview-window.png
+          if ($p.HasExited) { throw "/p exited by itself with code $($p.ExitCode)" }
+          $form.Close(); $form.Dispose()
+          if (-not $p.WaitForExit(5000)) { Stop-Process $p.Id; throw "/p kept running after its window closed" }
+
+          # Settings dialog (/c).
+          $p = Start-Process bin\Starfield.exe -ArgumentList '/c' -PassThru
+          Start-Sleep 3
+          Shot shots\windows-settings.png
+          if ($p.HasExited) { throw "/c exited by itself with code $($p.ExitCode)" }
+          Stop-Process $p.Id
+      - uses: actions/upload-artifact@v5
+        with: { name: screenshots-windows, path: shots/ }
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [macos, windows-build, windows-smoke, linux]
+    needs: [macos, linux, windows-build, windows-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-      - name: Publish the release
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with: { path: artifacts }
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          # The notes are this version's section of CHANGELOG.md plus install steps.
-          awk -v v="$VERSION" '$0 ~ "^## "v" " || $0 == "## "v {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
-          cat .github/release-install.md >> notes.md
-          gh release create "$GITHUB_REF_NAME" --title "Starfield $VERSION" --notes-file notes.md \
-            dist/macos/Starfield.saver.zip \
-            dist/windows/Starfield-windows.zip \
-            dist/linux-x86_64/starfield-linux-x86_64.tar.gz \
-            dist/linux-arm64/starfield-linux-arm64.tar.gz
+          # The release's name is the tag's message: git tag -a v1.2.3 -m "Short Name"
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          NAME=$(git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents:subject)')
+          case "$NAME" in ""|"Starfield $VERSION") NAME="" ;; esac
+          TITLE="$GITHUB_REF_NAME${NAME:+ — $NAME}"
+
+          # This version's section of CHANGELOG.md, then how to install it.
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > section.md
+          test -s section.md || { echo "No CHANGELOG section for $VERSION"; exit 1; }
+          {
+            echo "## Starfield Screensaver $TITLE"
+            cat section.md
+            echo "### Compatibility"
+            echo "- **macOS 11 and later:** unzip \`screensaver-starfield-$VERSION-macos.zip\` and double-click \`Starfield.saver\`. It isn't notarized, so the first time, click **Open Anyway** in System Settings → Privacy & Security."
+            echo "- **Windows 10 and 11:** unzip \`screensaver-starfield-$VERSION-windows.zip\`, then right-click \`Starfield.scr\` and choose **Install**. It isn't code-signed, so click **More info → Run anyway** the first time."
+            echo "- **Linux with XScreenSaver:** unpack \`screensaver-starfield-$VERSION-linux-x86_64.tar.gz\` (or \`-linux-arm64\` for a Raspberry Pi 4 or 5) and run \`./install.sh\`."
+            echo "- Installing over an earlier version keeps your settings."
+          } > notes.md
+          cat notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$TITLE" --notes-file notes.md \
+            artifacts/macos/* artifacts/windows/* artifacts/linux-x86_64/* artifacts/linux-arm64/*

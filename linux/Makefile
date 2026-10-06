@@ -1,31 +1,31 @@
-# Starfield for XScreenSaver. Needs a C compiler and the X11 headers:
-#   Debian/Ubuntu: sudo apt install build-essential libx11-dev libxext-dev libxft-dev
-#   Fedora:        sudo dnf install gcc make libX11-devel libXext-devel libXft-devel
-#   Arch:          sudo pacman -S base-devel libx11 libxext libxft
-# Then: make && sudo make install
-
+# Builds the XScreenSaver hack. Needs: libx11-dev libxext-dev libxft-dev
+# (Debian/Ubuntu), libX11-devel libXext-devel libXft-devel (Fedora), or
+# libx11 libxext libxft (Arch).
+PREFIX ?= /usr/local
+HACKDIR ?= $(PREFIX)/libexec/xscreensaver
+CONFDIR ?= $(PREFIX)/share/xscreensaver/config
 VERSION := $(shell cat ../VERSION)
-CC ?= cc
+ARCH ?= $(shell uname -m | sed 's/aarch64/arm64/')
+
 CFLAGS ?= -O2
-PREFIX ?= /usr
-# Where XScreenSaver looks for hacks and their settings.
-HACKDIR ?= $(shell for d in $(PREFIX)/libexec/xscreensaver $(PREFIX)/lib/xscreensaver $(PREFIX)/lib64/xscreensaver; do [ -d $$d ] && echo $$d && break; done)
-CONFIGDIR ?= $(PREFIX)/share/xscreensaver/config
+override CFLAGS += -std=c99 -Wall -Wextra -DVERSION_STR='"$(VERSION)"' -I../core $(shell pkg-config --cflags x11 xext xft)
+override LDLIBS += $(shell pkg-config --libs x11 xext xft) -lm
 
 SRC = ../core/starfield.c ../core/canvas.c starfield_x11.c
+PKG = screensaver-starfield-$(VERSION)-linux-$(ARCH)
 
-starfield: $(SRC) ../core/*.h
-	$(CC) -std=c99 $(CFLAGS) -Wall -Wextra -DVERSION_STR='"$(VERSION)"' -I../core $(shell pkg-config --cflags xft 2>/dev/null || echo -I/usr/include/freetype2) $(SRC) -o $@ -lXft -lX11 -lXext -lm $(LDFLAGS)
+../build/screensaver-starfield: $(SRC) ../core/*.h
+	mkdir -p ../build
+	$(CC) $(CFLAGS) $(SRC) -o $@ $(LDFLAGS) $(LDLIBS)
 
-install: starfield
-	@test -n "$(HACKDIR)" || { echo "XScreenSaver's hack directory wasn't found. Is xscreensaver installed? Or set HACKDIR=..."; exit 1; }
-	install -D -m 755 starfield $(DESTDIR)$(HACKDIR)/starfield
-	install -D -m 644 starfield.xml $(DESTDIR)$(CONFIGDIR)/starfield.xml
+install: ../build/screensaver-starfield
+	install -D -m 755 ../build/screensaver-starfield $(DESTDIR)$(HACKDIR)/screensaver-starfield
+	install -D -m 644 screensaver-starfield.xml $(DESTDIR)$(CONFDIR)/screensaver-starfield.xml
 
-uninstall:
-	rm -f $(DESTDIR)$(HACKDIR)/starfield $(DESTDIR)$(CONFIGDIR)/starfield.xml
+tarball: ../build/screensaver-starfield
+	rm -rf ../build/$(PKG)
+	mkdir -p ../build/$(PKG)
+	cp ../build/screensaver-starfield screensaver-starfield.xml install.sh INSTALL.txt ../LICENSE ../build/$(PKG)/
+	tar -C ../build -czf ../build/$(PKG).tar.gz $(PKG)
 
-clean:
-	rm -f starfield
-
-.PHONY: install uninstall clean
+.PHONY: install tarball

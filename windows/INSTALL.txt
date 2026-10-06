@@ -1,0 +1,11 @@
+Starfield for Windows
+
+1. Unzip, and keep Starfield.scr somewhere permanent (for example Documents\Starfield).
+2. Right-click Starfield.scr and choose Install.
+   If it won't start, right-click it, choose Properties, tick Unblock, and click OK.
+   Starfield isn't code-signed, so Windows may say "Windows protected your PC".
+   Click "More info", then "Run anyway". You only need to do this once.
+3. In Screen Saver Settings, choose Starfield and click Settings to pick colors,
+   the clock, and what shows under it.
+
+More: https://github.com/maxhayim/screensaver-starfield

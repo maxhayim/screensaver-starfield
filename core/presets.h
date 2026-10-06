@@ -1,6 +1,6 @@
 /*
  * Color presets for the Windows and Linux savers. Keep in step with
- * ColorPreset in macos/Settings.swift and linux/starfield.xml.
+ * ColorPreset in macos/Settings.swift and linux/screensaver-starfield.xml.
  */
 #ifndef SF_PRESETS_H
 #define SF_PRESETS_H
