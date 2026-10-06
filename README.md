@@ -206,6 +206,5 @@ Pull requests are welcome. Open an issue first to discuss ideas or report bugs. 
 
 ## Acknowledgments
 
-* The original starfield on [maxhayim.com](https://maxhayim.com)
 * [XScreenSaver](https://www.jwz.org/xscreensaver/) by Jamie Zawinski
 * [Xft](https://gitlab.freedesktop.org/xorg/lib/libxft) for text on Linux, and [MinGW-w64](https://www.mingw-w64.org/) for building on Windows
