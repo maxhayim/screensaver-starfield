@@ -2,6 +2,12 @@
 
 All notable changes to the Starfield screen saver are documented here.
 
+## [0.3.1] - 2026-10-06
+
+### Fixed
+- **macOS: the Options window didn't open.** Clicking **Options…** in System Settings did nothing useful, so the colors (including the accent color), the flight settings, and the text under the clock couldn't be changed. It opens now, with everything in it.
+- **macOS: copy and paste in the Options window.** The screen saver host has no Edit menu, so ⌘V never reached the custom-text field. Copy, paste, cut, select all, and undo now work.
+
 ## [0.3.0] - 2026-10-06
 
 ### Added

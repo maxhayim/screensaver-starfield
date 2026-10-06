@@ -154,6 +154,7 @@ GitHub Actions builds and tests all three on every push, and publishes a release
 
 This project follows semantic versioning.
 
+- **v0.3.1** — the macOS Options window opens again, with copy and paste
 - **v0.3.0** — a picture in the macOS screen saver list, install notes in every download, and the Linux program renamed `screensaver-starfield`
 - **v0.2.0** — your name, your username, or your own text under the clock
 - **v0.1.0** — the Starfield screen saver for macOS, Windows, and Linux

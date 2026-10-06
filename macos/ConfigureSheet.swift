@@ -1,5 +1,29 @@
 import AppKit
 
+/// The screen saver host has no Edit menu, so ⌘V and friends never reach a text field.
+/// This window handles those shortcuts itself and sends them to its focused field.
+final class EditingWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command || flags == [.command, .shift], let key = event.charactersIgnoringModifiers?.lowercased() {
+            let action: Selector?
+            switch (key, flags.contains(.shift)) {
+            case ("v", false): action = #selector(NSText.paste(_:))
+            case ("c", false): action = #selector(NSText.copy(_:))
+            case ("x", false): action = #selector(NSText.cut(_:))
+            case ("a", false): action = #selector(NSText.selectAll(_:))
+            case ("z", false): action = Selector(("undo:"))
+            case ("z", true): action = Selector(("redo:"))
+            default: action = nil
+            }
+            // Straight to this window's focused field: inside the host, this window
+            // usually isn't the app's key window, so NSApp.sendAction(to: nil) misses it.
+            if let action, let responder = firstResponder, responder.tryToPerform(action, with: self) { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 /// The "Options…" sheet in System Settings › Screen Saver.
 final class ConfigureSheetController: NSObject {
     let window: NSWindow
@@ -24,7 +48,7 @@ final class ConfigureSheetController: NSObject {
     init(settings: StarfieldSettings, onSave: @escaping (StarfieldSettings) -> Void) {
         self.settings = settings
         self.onSave = onSave
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
+        window = EditingWindow(contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
                           styleMask: [.titled], backing: .buffered, defer: false)
         super.init()
         build()
@@ -102,14 +126,16 @@ final class ConfigureSheetController: NSObject {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let buttons = NSStackView(views: [resetButton, spacer, cancel, ok])
-        buttons.widthAnchor.constraint(equalTo: grid.widthAnchor).isActive = true
 
         let root = NSStackView(views: [grid, buttons])
         root.orientation = .vertical
         root.alignment = .trailing
         root.spacing = 18
         root.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        // Only once both rows share a parent can the buttons match the grid's width.
+        buttons.widthAnchor.constraint(equalTo: grid.widthAnchor).isActive = true
         window.contentView = root
+        window.setContentSize(root.fittingSize)
     }
 
     private func label(_ text: String) -> NSTextField { NSTextField(labelWithString: text) }
