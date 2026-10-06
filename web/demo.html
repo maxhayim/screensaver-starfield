@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starfield</title>
+<!--
+  The web version of Starfield, with a settings panel built from SETTINGS.
+  Serve the repository and open this page:
+    python3 -m http.server 8000   →   http://localhost:8000/web/demo.html
+  Options in the address: ?panel=0 hides the panel, ?compact=1 draws the small preview,
+  ?name=Max sets the text for "Your name", and any setting by key (?preset=Synthwave&clock=false).
+-->
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0b0a; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #eeebe4; }
+  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; }
+  #panel { position: fixed; top: 16px; right: 16px; width: 260px; max-height: calc(100% - 32px); overflow: auto; padding: 14px 16px;
+           background: rgba(20, 20, 18, 0.86); border: 1px solid rgba(238, 235, 228, 0.15); border-radius: 12px; backdrop-filter: blur(8px); }
+  #panel h1 { margin: 0 0 10px; font-size: 14px; }
+  .row { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; margin: 8px 0; }
+  .row label { color: rgba(238, 235, 228, 0.7); }
+  input[type=range] { width: 100%; }
+  input[type=text], select { width: 100%; box-sizing: border-box; }
+  .hidden { display: none; }
+  #toggle { position: fixed; top: 16px; right: 16px; }
+  @media (max-width: 480px) { #panel { left: 16px; width: auto; } }
+</style>
+</head>
+<body>
+<canvas id="saver" aria-label="Starfield screen saver"></canvas>
+<form id="panel" autocomplete="off"><h1>Starfield</h1></form>
+<script type="module">
+import { SETTINGS, DEFAULTS, cleanSettings, presetOf, createSaver } from "./index.js";
+
+const params = new URLSearchParams(location.search);
+const fromQuery = {};
+for (const s of SETTINGS) {
+  if (!params.has(s.key)) continue;
+  const v = params.get(s.key);
+  fromQuery[s.key] = s.type === "range" ? Number(v) : s.type === "toggle" ? v === "true" || v === "1" : v;
+}
+// A preset in the address brings its colors, unless colors are given too.
+const preset = SETTINGS[0].presets.find((p) => p.name === fromQuery.preset);
+let settings = cleanSettings({ ...DEFAULTS, ...(preset ? preset.colors : {}), ...fromQuery });
+
+const saver = createSaver(document.getElementById("saver"), {
+  settings,
+  compact: params.get("compact") === "1",
+  reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+  userName: params.get("name") ?? "Your Name",
+});
+
+const panel = document.getElementById("panel");
+if (params.get("panel") === "0") panel.remove();
+const inputs = {};
+for (const s of SETTINGS) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.dataset.key = s.key;
+  const label = document.createElement("label");
+  label.textContent = s.label;
+  label.htmlFor = `f-${s.key}`;
+  let input;
+  if (s.type === "preset" || s.type === "choice") {
+    input = document.createElement("select");
+    const options = s.type === "preset" ? [...s.presets.map((p) => [p.name, p.name]), ["Custom", "Custom"]] : s.options;
+    for (const [id, text] of options) input.add(new Option(text, id));
+  } else {
+    input = document.createElement("input");
+    input.type = { color: "color", range: "range", toggle: "checkbox", text: "text", password: "password" }[s.type];
+    if (s.type === "range") Object.assign(input, { min: s.min, max: s.max, step: s.step });
+    if (s.maxLength) input.maxLength = s.maxLength;
+  }
+  input.id = `f-${s.key}`;
+  input.addEventListener("input", () => {
+    const value = s.type === "range" ? Number(input.value) : s.type === "toggle" ? input.checked : input.value;
+    if (s.key === "preset" && value === "Custom") return;
+    saver.update({ [s.key]: value });
+    const preset = s.key === "preset" ? SETTINGS[0].presets.find((p) => p.name === value) : null;
+    settings = cleanSettings({ ...settings, [s.key]: value, ...(preset ? preset.colors : {}) });
+    show();
+  });
+  inputs[s.key] = input;
+  row.append(label, input);
+  panel.append(row);
+}
+
+function show() {
+  settings.preset = presetOf(settings);
+  for (const s of SETTINGS) {
+    const input = inputs[s.key];
+    if (s.type === "toggle") input.checked = settings[s.key];
+    else input.value = settings[s.key];
+    if (s.type === "range") input.title = `${settings[s.key]}${s.unit ?? ""}`;
+    const row = input.parentElement;
+    row.classList.toggle("hidden", !!s.showIf && Object.entries(s.showIf).some(([k, v]) => settings[k] !== v));
+  }
+}
+show();
+</script>
+</body>
+</html>

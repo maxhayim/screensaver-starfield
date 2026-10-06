@@ -27,7 +27,16 @@ linux/
   starfield_x11.c         the hack: Xlib (+ MIT-SHM), Xft for the label, flags
   screensaver-starfield.xml  the XScreenSaver settings page
   Makefile, install.sh, INSTALL.txt
+web/
+  bridge.c                the core's WebAssembly interface: three drawing imports, a few exports
+  build.sh                builds starfield.wasm with zig, then wasm.js and presets.js
+  gen-presets.mjs         writes presets.js from core/presets.h
+  index.js                the JavaScript interface: SETTINGS, cleanSettings, createSaver
+  starfield.wasm, wasm.js, presets.js   built files, committed so installing needs no build
+  demo.html               the web version with a settings panel built from SETTINGS
+package.json              lets a page install the web version from GitHub
 tests/test_starfield.c    core and canvas tests
+tests/web.test.mjs        web tests (node), with a stub canvas
 tools/
   preview.swift           loads Starfield.saver like the host does and renders PNGs
   render.c                renders the Windows/Linux drawing path to a BMP on any OS
@@ -78,6 +87,58 @@ docs/                     this guide; assets/ holds the logo and screenshot
 - HiDPI scale comes from `Xft.dpi`, or `-scale`.
 - Xft doesn't reorder right-to-left text, so `to_display_order` does a small part of the Unicode bidi algorithm: enough for names and short labels.
 
+## Web
+
+The web version is the same core compiled to WebAssembly, drawing into a `<canvas>` through the browser's 2D context, for pages like maxhayim.com. A page installs it from GitHub at a release tag:
+
+```
+npm install github:maxhayim/screensaver-starfield#vX.Y.Z
+```
+
+`package.json` points `exports` at `web/index.js` and has no dependencies or build step: `web/starfield.wasm`, `web/wasm.js` (the same bytes as base64, so a bundler never has to find a `.wasm` file), and `web/presets.js` are built by `web/build.sh` and committed. CI rebuilds them and fails if they differ from what's committed, and checks that `package.json`'s version matches `VERSION`.
+
+### The module
+
+`web/bridge.c` imports three functions from the module `"host"` and nothing else (no WASI calls):
+
+- `fill(r, g, b, a)` covers the canvas with a color; with `a < 1` it's the afterglow
+- `line(x0, y0, x1, y1, width, r, g, b, a)` with round caps
+- `circle(x, y, radius, r, g, b, a)` filled
+
+It exports `create(seed)`, `destroy`, `resize(w, h)`, `step(dt)`, `render`, `take_needs_clear`, `set_options(...)` (colors as 0..1 floats, then accent share, speed, trails, reduced motion, compact), `preset_count`, and `star_count`. The presets themselves go to JavaScript as `web/presets.js`, generated from `core/presets.h`.
+
+```
+zig cc -target wasm32-wasi -Oz -s -mexec-model=reactor -I core web/bridge.c core/starfield.c -o web/starfield.wasm
+```
+
+### The JavaScript interface
+
+The Mesh screen saver's web version has the same interface, so a page can treat both savers alike.
+
+```js
+export const ID = "starfield";
+export const NAME = "Starfield";
+export const SETTINGS = [/* { key, label, type, default, ... } in the order of the native Options sheet */];
+export const DEFAULTS = { /* key: default */ };
+export function cleanSettings(raw) {}  // any saved object → valid settings
+export function presetOf(settings) {}  // the matching preset's name, or "Custom"
+export function createSaver(canvas, options) {}  // → { update(settings), destroy() }
+```
+
+- **SETTINGS** types: `preset` (with `presets: [{ name, colors: { background, stars, accent } }]`), `color` (`#rrggbb`), `range` (`min`, `max`, `step`, `unit`), `toggle`, `choice` (`options: [[id, label], …]`), `text` (`maxLength`, and `showIf: { key: value }`), and `password` (unused here). The keys are `preset`, `background`, `stars`, `accent`, `accentPercent` (0–50), `speedPercent` (25–300, step 5), `trailsPercent` (0–95), `clock`, `use24Hour`, `label` (`none`, `name`, `username`, `custom`), and `labelText` (80 characters).
+- **cleanSettings** drops unknown keys and replaces wrong types and out-of-range values with defaults. A saved `preset` name with no colors picks that preset's colors, and `preset` always ends up matching the colors (`presetOf`).
+- **createSaver(canvas, options)**. Options: `settings`; `compact` for a small preview; `reducedMotion`; `userName`, the text for "Your name" and "Your username", since a page has no system user; `now`, a function returning the `Date` the clock shows. It follows the canvas's CSS size and `devicePixelRatio` (ResizeObserver), and pauses while the page is hidden. `update(settings)` takes a partial object; picking a `preset` sets its colors. `destroy()` stops it and frees the core.
+
+### How it draws
+
+- `step(dt)` with `dt` in seconds, clamped to 0.1, then `render()` into an offscreen canvas that keeps its pixels between frames (the trails), in points scaled by `devicePixelRatio`.
+- Each frame copies that canvas to the page's canvas and draws the clock on top, so the clock never smears: bottom-left, the time at 48 points semibold with a −1 point letter spacing and tabular digits, the label under it at 14 points and half opacity, 32-point margins, in the system font (`-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`). A label that starts with a right-to-left letter reads right to left, as on the other systems.
+
+### Testing
+
+- `node tests/web.test.mjs` runs the saver against a stub canvas: stars are drawn, the clock and label appear, `cleanSettings` fixes bad input, and every preset in `presets.h` is in `SETTINGS`.
+- `python3 -m http.server` in the repository, then open `/web/demo.html`. The address takes any setting by key (`?preset=Synthwave&use24Hour=true`), plus `panel=0`, `compact=1`, and `name=…`.
+
 ## Building and testing
 
 ```
@@ -91,7 +152,7 @@ build/preview build/Starfield.saver shot.png 5 [width height] [--preview]
 
 ## Releasing
 
-1. Add a section to `CHANGELOG.md` (`## [x.y.z] - date`) and set `VERSION`.
+1. Add a section to `CHANGELOG.md` (`## [x.y.z] - date`), and set `VERSION` and `"version"` in `package.json`.
 2. Commit and push, and wait for CI to pass.
 3. Tag with the release's short name as the message, and push the tag:
    ```

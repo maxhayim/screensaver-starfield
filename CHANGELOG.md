@@ -2,6 +2,12 @@
 
 All notable changes to the Starfield screen saver are documented here.
 
+## [0.4.0] - 2026-10-06
+
+### Added
+- **A web version for web pages,** built from the same C core as the downloads (compiled to WebAssembly), so it looks and moves the same. Install it with `npm install github:maxhayim/screensaver-starfield#v0.4.0` and run it in a `<canvas>` with `createSaver`. It has the same settings as the downloads, listed in `SETTINGS` so a page can build its own settings panel, and the same interface as the Mesh screen saver's web version.
+- `web/demo.html`: the web version with a settings panel, to try it in a browser.
+
 ## [0.3.1] - 2026-10-06
 
 ### Fixed

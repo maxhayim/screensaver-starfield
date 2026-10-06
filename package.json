@@ -1,0 +1,8 @@
+{
+  "name": "screensaver-starfield",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./web/index.js" },
+  "files": ["web"]
+}

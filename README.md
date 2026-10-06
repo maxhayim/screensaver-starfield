@@ -21,6 +21,7 @@ This repository contains:
 - **macos/** — the `.saver` for macOS (Swift)
 - **windows/** — the `.scr` for Windows (C, GDI)
 - **linux/** — the XScreenSaver hack for Linux (C, Xlib)
+- **web/** — the web version for web pages (the core in WebAssembly, and JavaScript)
 - **tests/** and **tools/** — tests and preview renderers
 - **docs/** — the developer guide, the logo, and the screenshot
 
@@ -79,6 +80,27 @@ Starfield isn't code-signed or notarized (that costs money every year), so macOS
 
 GNOME and KDE don't support third-party screen savers, so XScreenSaver is the way to run it on Linux.
 
+### On a web page
+
+The web version runs the same core, compiled to WebAssembly, in a `<canvas>`. It has no dependencies, and installing it needs no build:
+
+```
+npm install github:maxhayim/screensaver-starfield#v0.4.0
+```
+
+```js
+import { createSaver, cleanSettings } from "screensaver-starfield";
+
+const saver = createSaver(document.querySelector("canvas"), {
+  settings: cleanSettings(JSON.parse(localStorage.starfield ?? "{}")),
+  userName: "Max",  // shown for "Your name" and "Your username"
+});
+saver.update({ preset: "Synthwave" });  // live changes
+saver.destroy();                         // when the page is done with it
+```
+
+`SETTINGS` lists every setting with its label, type, range, and default, so a page can build its own settings panel. [web/demo.html](web/demo.html) is one: serve the repository (`python3 -m http.server`) and open `/web/demo.html`. See [docs/GUIDE.md](docs/GUIDE.md#web) for the whole interface.
+
 ### Updating
 
 Install the new release over the old one: double-click the new `Starfield.saver` on macOS, replace `Starfield.scr` in the same folder on Windows, or run the new `install.sh` on Linux. Your settings carry over.
@@ -108,6 +130,7 @@ Show the clock or hide it, in 12- or 24-hour time. The line under it can show **
 - **macOS:** **Options…** next to Starfield in **System Settings → Screen Saver**
 - **Windows:** **Settings** in **Screen Saver Settings**
 - **Linux:** the Starfield page in `xscreensaver-settings`, or flags on the command line (`./screensaver-starfield -help`)
+- **Web:** whatever the page builds from `SETTINGS`, passed to `createSaver` and `update`
 
 ---
 
@@ -128,6 +151,7 @@ core/presets.h        color presets and defaults
 macos/                the .saver: the view, the Options sheet, settings, thumbnails
 windows/              the .scr: Win32 + GDI, the settings dialog, install notes
 linux/                the XScreenSaver hack, its settings XML, installer, and install notes
+web/                  the web version: index.js, the WebAssembly core (built, and committed), demo.html
 tests/                core and renderer tests
 tools/                preview renderers for macOS and for Windows/Linux drawing
 docs/GUIDE.md         developer guide
@@ -144,6 +168,7 @@ See [docs/GUIDE.md](docs/GUIDE.md).
 macos/build.sh        # build/Starfield.saver (needs the Xcode command-line tools)
 windows/build.sh      # build/Starfield.scr (cross-compiles with mingw-w64)
 make -C linux         # build/screensaver-starfield (needs libx11, libxext, and libxft dev packages)
+web/build.sh          # web/starfield.wasm, web/wasm.js, web/presets.js (needs zig and node)
 ```
 
 GitHub Actions builds and tests all three on every push, and publishes a release for every version tag.
@@ -154,6 +179,7 @@ GitHub Actions builds and tests all three on every push, and publishes a release
 
 This project follows semantic versioning.
 
+- **v0.4.0** — a web version for web pages, from the same core
 - **v0.3.1** — the macOS Options window opens again, with copy and paste
 - **v0.3.0** — a picture in the macOS screen saver list, install notes in every download, and the Linux program renamed `screensaver-starfield`
 - **v0.2.0** — your name, your username, or your own text under the clock
