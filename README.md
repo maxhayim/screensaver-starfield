@@ -12,10 +12,6 @@
 
 A 90s flight through space, on **Windows, macOS, and Linux**. Stars stream out from the center of the screen, leaving short streaks that fade like a CRT's afterglow, and about one in fourteen glows orange. See it live on [maxhayim.com](https://maxhayim.com).
 
-<p align="center">
-  <img src="docs/assets/screenshot.png" alt="The Starfield screen saver" width="760"/>
-</p>
-
 This repository contains:
 - **core/** — the flight and a small software renderer in plain C, shared by all three systems
 - **macos/** — the `.saver` for macOS (Swift)
@@ -23,7 +19,53 @@ This repository contains:
 - **linux/** — the XScreenSaver hack for Linux (C, Xlib)
 - **web/** — the web version for web pages (the core in WebAssembly, and JavaScript)
 - **tests/** and **tools/** — tests and preview renderers
-- **docs/** — the developer guide, the logo, and the screenshot
+- **docs/** — the developer guide, the logo, and the screenshots
+
+---
+
+## Screenshots
+
+All screenshots are of the real screen savers: macOS for the presets, plus the settings on every system and the web version.
+
+**Original colors**: warm white stars, about one in fourteen orange, with your name under the clock
+
+![Original colors](docs/screenshots/original.png)
+
+**Synthwave**: cyan stars, a quarter of them pink, and 24-hour time
+
+![Synthwave preset](docs/screenshots/synthwave.png)
+
+**Deep space**: pale blue stars with gold accents, and long trails
+
+![Deep space preset with long trails](docs/screenshots/deep-space.png)
+
+**Green terminal**: with your own text under the clock
+
+![Green terminal preset](docs/screenshots/green-terminal.png)
+
+**Paper**: dark stars on a light background
+
+![Paper preset](docs/screenshots/paper.png)
+
+**Text under the clock**: any language, including right-to-left scripts like Hebrew
+
+![Hebrew text under the clock](docs/screenshots/hebrew-label.png)
+
+**Settings on macOS**: Options… in System Settings → Screen Saver
+
+<img src="docs/screenshots/macos-options.png" alt="The Options window on macOS" width="374"/>
+
+**Settings on Windows**: Settings in Screen Saver Settings
+
+<img src="docs/screenshots/windows-settings.png" alt="The Settings dialog on Windows" width="471"/>
+
+**Linux**: running inside XScreenSaver
+
+![Starfield in XScreenSaver on Linux](docs/screenshots/linux-xscreensaver.png)
+
+**Web version**: the demo page, with a settings panel built from `SETTINGS`
+
+![The web version with its settings panel](docs/screenshots/web-demo.png)
 
 ---
 
@@ -155,7 +197,8 @@ web/                  the web version: index.js, the WebAssembly core (built, an
 tests/                core and renderer tests
 tools/                preview renderers for macOS and for Windows/Linux drawing
 docs/GUIDE.md         developer guide
-docs/assets/          logo and screenshot
+docs/assets/          logo
+docs/screenshots/     the screenshots in this README
 ```
 
 ---
@@ -179,6 +222,7 @@ GitHub Actions builds and tests all three on every push, and publishes a release
 
 This project follows semantic versioning.
 
+- **v0.4.1** — screenshots in the README, and tidier buttons in the macOS Options window
 - **v0.4.0** — a web version for web pages, from the same core
 - **v0.3.1** — the macOS Options window opens again, with copy and paste
 - **v0.3.0** — a picture in the macOS screen saver list, install notes in every download, and the Linux program renamed `screensaver-starfield`

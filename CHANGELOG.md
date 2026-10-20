@@ -2,6 +2,14 @@
 
 All notable changes to the Starfield screen saver are documented here.
 
+## [0.4.1] - 2026-10-20
+
+### Added
+- **Screenshots in the README:** every preset, text under the clock, the settings on macOS and Windows, Linux in XScreenSaver, and the web version, in `docs/screenshots/`.
+
+### Fixed
+- **macOS: the Options window's buttons** ran to its right edge; they keep the window's margin now.
+
 ## [0.4.0] - 2026-10-06
 
 ### Added

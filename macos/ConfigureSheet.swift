@@ -132,8 +132,9 @@ final class ConfigureSheetController: NSObject {
         root.alignment = .trailing
         root.spacing = 18
         root.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
-        // Only once both rows share a parent can the buttons match the grid's width.
-        buttons.widthAnchor.constraint(equalTo: grid.widthAnchor).isActive = true
+        // Once both rows share a parent: the buttons span the window inside its margins.
+        buttons.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20).isActive = true
+        buttons.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20).isActive = true
         window.contentView = root
         window.setContentSize(root.fittingSize)
     }
